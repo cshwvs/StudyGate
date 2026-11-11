@@ -1,13 +1,16 @@
 package com.example.studygate
 
+import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.SystemBarStyle
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
@@ -19,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -53,7 +56,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import androidx.core.view.WindowCompat
 import androidx.datastore.preferences.core.edit
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
@@ -244,9 +246,8 @@ fun SetupScreen(
     ) { padding ->
         Column(
             modifier = Modifier.padding(padding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp) // 间距减小
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 统一配置输入框的样式：浅灰圆角描边，聚焦变蓝
             val textFieldColors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color(0xFF1A73E8),
                 unfocusedBorderColor = Color(0xFFE0E0E0),
@@ -302,11 +303,15 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
     val isImeVisible = WindowInsets.isImeVisible
 
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var isSearchEnabled by remember { mutableStateOf(false) }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     var showRenameDialogFor by remember { mutableStateOf<ChatSession?>(null) }
     var renameInput by remember { mutableStateOf("") }
@@ -379,7 +384,7 @@ fun ChatScreen(
                     Text("永久删除对话", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textPrimary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Box(modifier = Modifier.fillMaxWidth().height(36.dp), contentAlignment = Alignment.Center) {
-                        Text("删除后，该对话将不可恢复", fontSize = 12.sp, color = textSecondary, textAlign = TextAlign.Center)
+                        Text("删除后，该对话将不可恢复，确认删除？", fontSize = 12.sp, color = textSecondary, textAlign = TextAlign.Center)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -445,7 +450,6 @@ fun ChatScreen(
 
                         val sortedSessions = filteredSessions.sortedWith(compareByDescending<ChatSession> { it.isPinned }.thenByDescending { it.timestamp })
 
-                        // 分组逻辑：超过 7 天的使用具体的年月日
                         val grouped = sortedSessions.groupBy {
                             val diff = System.currentTimeMillis() - it.timestamp
                             when {
@@ -459,7 +463,6 @@ fun ChatScreen(
                             }
                         }
 
-                        // 动态遍历分组，保持插入顺序（由于 sortedSessions 已经排好序，LinkedHashMap 会保持顺序）
                         for ((groupName, groupSessions) in grouped) {
                             item { Text(groupName, color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)) }
 
@@ -563,15 +566,18 @@ fun ChatScreen(
             }
         }
     ) {
+        // 【绝对完美混合架构】Column + Box + 兜底白板，上中下三面全部锁死
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.White)
-                // 【核心修复】点击主界面时，如果是抽屉打开状态，只关抽屉并清除焦点，阻断事件传递
                 .pointerInput(isDrawerOpen) {
                     detectTapGestures(onTap = {
                         if (isDrawerOpen) {
+                            // 瞬间砸下键盘
                             focusManager.clearFocus(force = true)
+                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                            imm.hideSoftInputFromWindow(View(context).windowToken, 0)
                             scope.launch { drawerState.close() }
                         } else {
                             focusManager.clearFocus()
@@ -580,8 +586,16 @@ fun ChatScreen(
                 }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                // 1. 顶部物理隔断，彻底杜绝顶部穿透
                 CenterAlignedTopAppBar(
-                    title = { Text(currentTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = textPrimary) },
+                    title = {
+                        Text(
+                            currentTitle,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = textPrimary
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "菜单", tint = textPrimary)
@@ -599,162 +613,243 @@ fun ChatScreen(
                     modifier = Modifier.statusBarsPadding()
                 )
 
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 160.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(messages) { msg ->
-                        if (msg.role == "user") {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                Surface(color = userBubbleColor, shape = RoundedCornerShape(16.dp), modifier = Modifier.widthIn(max = 280.dp)) {
-                                    Text(text = msg.content, modifier = Modifier.padding(12.dp), color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
+                // 2. 中间和底部混合区
+                Box(modifier = Modifier.weight(1f)) {
+
+                    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+                    // 消息列表（铺满下层）
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        // 【核心修改点1】把 bottom 的 4.dp 改成 20.dp，让穿透界限往上移
+                        contentPadding = PaddingValues(
+                            top = 16.dp,
+                            start = 16.dp,
+                            end = 16.dp,
+                            bottom = navBarHeight + 18.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(messages) { msg ->
+                            if (msg.role == "user") {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    Surface(
+                                        color = userBubbleColor,
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.widthIn(max = 280.dp)
+                                    ) {
+                                        Text(
+                                            text = msg.content,
+                                            modifier = Modifier.padding(12.dp),
+                                            color = textPrimary,
+                                            fontSize = 12.sp,
+                                            lineHeight = 18.sp
+                                        )
+                                    }
                                 }
-                            }
-                        } else {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("已思考 (用时 2 秒)", color = textSecondary, fontSize = 12.sp)
-                                    Text(" ∨", color = textSecondary, fontSize = 12.sp)
+                            } else {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("已思考 (用时 2 秒)", color = textSecondary, fontSize = 12.sp)
+                                        Text(" ∨", color = textSecondary, fontSize = 12.sp)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(text = msg.content, color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(text = msg.content, color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
                             }
                         }
+                        if (isLoading) {
+                            item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) }
+                        }
                     }
-                    if (isLoading) { item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) } }
-                }
-            }
 
-            // 输入框区域
-            if (!isDrawerOpen) {
-                val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .imePadding()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = navBarHeight + 16.dp, top = 8.dp)
-                ) {
+                    // 【核心修改点2】底部纯白盾牌高度从 +8 变成 +20，配合列表把底线抬高
                     Box(
                         modifier = Modifier
+                            .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .graphicsLayer { clip = false }
-                            .drawBehind {
-                                val paint = Paint().apply {
-                                    color = android.graphics.Color.TRANSPARENT
-                                    setShadowLayer(
-                                        24.dp.toPx(),
-                                        0f,
-                                        16.dp.toPx(),
-                                        android.graphics.Color.argb(60, 0, 0, 0)
-                                    )
-                                }
-                                drawIntoCanvas {
-                                    it.nativeCanvas.drawRoundRect(
-                                        0f, 0f, size.width, size.height,
-                                        24.dp.toPx(), 24.dp.toPx(), paint
-                                    )
-                                }
-                            }
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(24.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                                        .animateContentSize()
-                                ) {
-                                    BasicTextField(
-                                        value = input,
-                                        onValueChange = { input = it },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textStyle = TextStyle(fontSize = 12.sp, color = textPrimary, lineHeight = 16.sp),
-                                        maxLines = 5,
-                                        decorationBox = { innerTextField ->
-                                            if (input.isEmpty()) {
-                                                Text("在此处发消息。深度思考已开", color = placeholderColor, fontSize = 12.sp, lineHeight = 16.sp)
-                                            }
-                                            innerTextField()
-                                        }
-                                    )
-                                }
+                            .height(navBarHeight + 20.dp)
+                            .background(Color.White)
+                    )
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, bottom = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isSearchEnabled) Color(0xFFE8F0FE) else Color.Transparent,
-                                        border = BorderStroke(1.dp, if (isSearchEnabled) Color(0xFF1A73E8) else Color(0xFFDDDDDD)),
-                                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) { isSearchEnabled = !isSearchEnabled }
-                                    ) {
-                                        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text("智能搜索", color = if (isSearchEnabled) Color(0xFF1A73E8) else textPrimary, fontSize = 10.sp)
+                    // 悬浮输入框（带有阴影和圆角，左右留空给消息穿透）
+                    if (!isDrawerOpen) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .then(if (isFocused) Modifier.imePadding() else Modifier)
+                                .padding(horizontal = 16.dp)
+                                .padding(bottom = navBarHeight + 4.dp) // 输入框依然极限贴底，不往上走
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer { clip = false }
+                                    .drawBehind {
+                                        val paint = Paint().apply {
+                                            color = android.graphics.Color.TRANSPARENT
+                                            setShadowLayer(
+                                                24.dp.toPx(),
+                                                0f,
+                                                16.dp.toPx(),
+                                                android.graphics.Color.argb(60, 0, 0, 0)
+                                            )
+                                        }
+                                        drawIntoCanvas {
+                                            it.nativeCanvas.drawRoundRect(
+                                                0f, 0f, size.width, size.height,
+                                                24.dp.toPx(), 24.dp.toPx(), paint
+                                            )
                                         }
                                     }
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Icon(
-                                        Icons.Default.Add, contentDescription = "附件",
-                                        tint = textPrimary,
-                                        modifier = Modifier.size(18.dp).clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) { }
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    if (input.isNotBlank()) {
-                                        Button(
-                                            onClick = {
-                                                if (isLoading || currentSession == null) return@Button
-                                                val userMsg = Message("user", input)
-                                                val newMsgs = messages + userMsg
-                                                val updatedSession = currentSession.copy(
-                                                    messages = newMsgs.toMutableList(),
-                                                    timestamp = System.currentTimeMillis()
-                                                )
-                                                val newSessions = sessions.map { if (it.id == currentSession.id) updatedSession else it }
-                                                onUpdateSessions(newSessions)
-
-                                                val promptToSend = input
-                                                input = ""
-                                                isLoading = true
-                                                focusManager.clearFocus()
-
-                                                scope.launch {
-                                                    if (globalApiKey.isBlank()) {
-                                                        val errMsgs = newMsgs + Message("assistant", "请先去新建对话里填入 API Key！")
-                                                        onUpdateSessions(newSessions.map { if (it.id == currentSession.id) updatedSession.copy(messages = errMsgs.toMutableList()) else it })
-                                                        isLoading = false
-                                                        return@launch
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = Color.White,
+                                    border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                                .animateContentSize()
+                                        ) {
+                                            BasicTextField(
+                                                value = input,
+                                                onValueChange = { input = it },
+                                                interactionSource = interactionSource,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textStyle = TextStyle(
+                                                    fontSize = 12.sp,
+                                                    color = textPrimary,
+                                                    lineHeight = 16.sp
+                                                ),
+                                                maxLines = 5,
+                                                decorationBox = { innerTextField ->
+                                                    if (input.isEmpty()) {
+                                                        Text(
+                                                            "在此处发消息。深度思考已开",
+                                                            color = placeholderColor,
+                                                            fontSize = 12.sp,
+                                                            lineHeight = 16.sp
+                                                        )
                                                     }
-
-                                                    val reply = ApiClient.chat(globalBaseUrl, globalApiKey, currentSession.model, promptToSend)
-                                                    val finalMsgs = newMsgs + Message("assistant", reply)
-                                                    onUpdateSessions(newSessions.map { if (it.id == currentSession.id) updatedSession.copy(messages = finalMsgs.toMutableList()) else it })
-                                                    isLoading = false
+                                                    innerTextField()
                                                 }
-                                            },
-                                            modifier = Modifier.size(24.dp),
-                                            contentPadding = PaddingValues(0.dp),
-                                            shape = CircleShape,
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
-                                        ) { Text("↑", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth()
+                                                .padding(start = 12.dp, end = 8.dp, bottom = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = if (isSearchEnabled) Color(0xFFE8F0FE) else Color.Transparent,
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (isSearchEnabled) Color(0xFF1A73E8) else Color(0xFFDDDDDD)
+                                                ),
+                                                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null
+                                                ) { isSearchEnabled = !isSearchEnabled }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 0.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        "智能搜索",
+                                                        color = if (isSearchEnabled) Color(0xFF1A73E8) else textPrimary,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.width(12.dp))
+
+                                            Icon(
+                                                Icons.Default.Add, contentDescription = "附件",
+                                                tint = textPrimary,
+                                                modifier = Modifier.size(18.dp).clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null
+                                                ) { }
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+
+                                            if (input.isNotBlank()) {
+                                                Button(
+                                                    onClick = {
+                                                        if (isLoading || currentSession == null) return@Button
+                                                        val userMsg = Message("user", input)
+                                                        val newMsgs = messages + userMsg
+                                                        val updatedSession = currentSession.copy(
+                                                            messages = newMsgs.toMutableList(),
+                                                            timestamp = System.currentTimeMillis()
+                                                        )
+                                                        val newSessions =
+                                                            sessions.map { if (it.id == currentSession.id) updatedSession else it }
+                                                        onUpdateSessions(newSessions)
+
+                                                        val promptToSend = input
+                                                        input = ""
+                                                        isLoading = true
+                                                        focusManager.clearFocus()
+
+                                                        scope.launch {
+                                                            if (globalApiKey.isBlank()) {
+                                                                val errMsgs = newMsgs + Message(
+                                                                    "assistant",
+                                                                    "请先去新建对话里填入 API Key！"
+                                                                )
+                                                                onUpdateSessions(newSessions.map {
+                                                                    if (it.id == currentSession.id) updatedSession.copy(
+                                                                        messages = errMsgs.toMutableList()
+                                                                    ) else it
+                                                                })
+                                                                isLoading = false
+                                                                return@launch
+                                                            }
+
+                                                            val reply = ApiClient.chat(
+                                                                globalBaseUrl,
+                                                                globalApiKey,
+                                                                currentSession.model,
+                                                                promptToSend
+                                                            )
+                                                            val finalMsgs = newMsgs + Message("assistant", reply)
+                                                            onUpdateSessions(newSessions.map {
+                                                                if (it.id == currentSession.id) updatedSession.copy(
+                                                                    messages = finalMsgs.toMutableList()
+                                                                ) else it
+                                                            })
+                                                            isLoading = false
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(24.dp),
+                                                    contentPadding = PaddingValues(0.dp),
+                                                    shape = CircleShape,
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = Color(
+                                                            0xFF1A73E8
+                                                        )
+                                                    )
+                                                ) {
+                                                    Text(
+                                                        "↑",
+                                                        color = Color.White,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
