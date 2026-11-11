@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -63,6 +64,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import kotlin.math.roundToInt
 
@@ -70,7 +74,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 使用官方最新 API 强制全屏透明
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
@@ -226,23 +229,60 @@ fun SetupScreen(
     var model by remember { mutableStateOf(initialModel) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("新建对话配置", fontSize = 12.sp) }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)) },
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("新建对话", fontSize = 16.sp, fontWeight = FontWeight.Medium) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color(0xFF1A1A1A))
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White)
+            )
+        },
         containerColor = Color.White
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).padding(16.dp).statusBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(padding).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp) // 间距减小
         ) {
-            OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("对话名称", fontSize = 12.sp) }, modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true)
-            OutlinedTextField(value = baseUrl, onValueChange = { baseUrl = it }, label = { Text("Base URL", fontSize = 12.sp) }, modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true)
-            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text("API Key (随时可改)", fontSize = 12.sp) }, modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true)
-            OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Model (选定后不可改)", fontSize = 12.sp) }, modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true)
+            // 统一配置输入框的样式：浅灰圆角描边，聚焦变蓝
+            val textFieldColors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF1A73E8),
+                unfocusedBorderColor = Color(0xFFE0E0E0),
+                focusedLabelColor = Color(0xFF1A73E8),
+                unfocusedLabelColor = Color(0xFF888888),
+                cursorColor = Color(0xFF1A73E8)
+            )
+            val textFieldShape = RoundedCornerShape(12.dp)
+
+            OutlinedTextField(
+                value = title, onValueChange = { title = it }, label = { Text("对话名称", fontSize = 12.sp) },
+                modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true,
+                shape = textFieldShape, colors = textFieldColors
+            )
+            OutlinedTextField(
+                value = baseUrl, onValueChange = { baseUrl = it }, label = { Text("Base URL", fontSize = 12.sp) },
+                modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true,
+                shape = textFieldShape, colors = textFieldColors
+            )
+            OutlinedTextField(
+                value = apiKey, onValueChange = { apiKey = it }, label = { Text("API Key (随时可改)", fontSize = 12.sp) },
+                modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true,
+                shape = textFieldShape, colors = textFieldColors
+            )
+            OutlinedTextField(
+                value = model, onValueChange = { model = it }, label = { Text("Model (选定后不可改)", fontSize = 12.sp) },
+                modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 12.sp), singleLine = true,
+                shape = textFieldShape, colors = textFieldColors
+            )
 
             Button(
                 onClick = { onSave(title, baseUrl, apiKey, model) },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
-            ) { Text("保存并进入对话", fontSize = 12.sp) }
+            ) { Text("保存并进入对话", fontSize = 14.sp) }
         }
     }
 }
@@ -286,9 +326,6 @@ fun ChatScreen(
 
     LaunchedEffect(isImeVisible) {
         if (!isImeVisible) focusManager.clearFocus()
-    }
-    LaunchedEffect(isDrawerOpen) {
-        if (!isDrawerOpen) focusManager.clearFocus()
     }
 
     // 重命名弹窗
@@ -342,7 +379,7 @@ fun ChatScreen(
                     Text("永久删除对话", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textPrimary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Box(modifier = Modifier.fillMaxWidth().height(36.dp), contentAlignment = Alignment.Center) {
-                        Text("删除后，该对话将不可恢复，确认删除？", fontSize = 12.sp, color = textSecondary, textAlign = TextAlign.Center)
+                        Text("删除后，该对话将不可恢复", fontSize = 12.sp, color = textSecondary, textAlign = TextAlign.Center)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -407,18 +444,23 @@ fun ChatScreen(
                         }
 
                         val sortedSessions = filteredSessions.sortedWith(compareByDescending<ChatSession> { it.isPinned }.thenByDescending { it.timestamp })
+
+                        // 分组逻辑：超过 7 天的使用具体的年月日
                         val grouped = sortedSessions.groupBy {
                             val diff = System.currentTimeMillis() - it.timestamp
                             when {
                                 diff < 24 * 60 * 60 * 1000 -> "今天"
                                 diff < 48 * 60 * 60 * 1000 -> "昨天"
                                 diff < 7 * 24 * 60 * 60 * 1000 -> "7天内"
-                                else -> "更早"
+                                else -> {
+                                    val sdf = SimpleDateFormat("yyyy年M月d日", Locale.getDefault())
+                                    sdf.format(Date(it.timestamp))
+                                }
                             }
                         }
-                        val order = listOf("今天", "昨天", "7天内", "更早")
-                        for (groupName in order) {
-                            val groupSessions = grouped[groupName] ?: continue
+
+                        // 动态遍历分组，保持插入顺序（由于 sortedSessions 已经排好序，LinkedHashMap 会保持顺序）
+                        for ((groupName, groupSessions) in grouped) {
                             item { Text(groupName, color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)) }
 
                             items(groupSessions) { session ->
@@ -521,17 +563,25 @@ fun ChatScreen(
             }
         }
     ) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White)
+                // 【核心修复】点击主界面时，如果是抽屉打开状态，只关抽屉并清除焦点，阻断事件传递
+                .pointerInput(isDrawerOpen) {
+                    detectTapGestures(onTap = {
+                        if (isDrawerOpen) {
+                            focusManager.clearFocus(force = true)
+                            scope.launch { drawerState.close() }
+                        } else {
+                            focusManager.clearFocus()
+                        }
+                    })
+                }
+        ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            currentTitle,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textPrimary
-                        )
-                    },
+                    title = { Text(currentTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = textPrimary) },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "菜单", tint = textPrimary)
@@ -550,26 +600,15 @@ fun ChatScreen(
                 )
 
                 LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                        .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 160.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(messages) { msg ->
                         if (msg.role == "user") {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                Surface(
-                                    color = userBubbleColor,
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.widthIn(max = 280.dp)
-                                ) {
-                                    Text(
-                                        text = msg.content,
-                                        modifier = Modifier.padding(12.dp),
-                                        color = textPrimary,
-                                        fontSize = 12.sp,
-                                        lineHeight = 18.sp
-                                    )
+                                Surface(color = userBubbleColor, shape = RoundedCornerShape(16.dp), modifier = Modifier.widthIn(max = 280.dp)) {
+                                    Text(text = msg.content, modifier = Modifier.padding(12.dp), color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
                                 }
                             }
                         } else {
@@ -583,28 +622,22 @@ fun ChatScreen(
                             }
                         }
                     }
-                    if (isLoading) {
-                        item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) }
-                    }
+                    if (isLoading) { item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) } }
                 }
             }
 
-            // 输入框区域：绝对全屏铺满，并覆盖到导航栏
+            // 输入框区域
             if (!isDrawerOpen) {
-                // 获取系统底部导航栏的物理高度
                 val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-                // 整个输入框容器贴底，并加上左右边距
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .imePadding()
                         .padding(horizontal = 16.dp)
-                        // 【核心修正】让输入框距离屏幕底部留出：导航栏高度 + 16dp（留给阴影自然渐变的空间）
                         .padding(bottom = navBarHeight + 16.dp, top = 8.dp)
                 ) {
-                    // 在这个 Box 上直接画阴影，这样阴影和输入框就绝对不会分离了
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -612,7 +645,6 @@ fun ChatScreen(
                             .drawBehind {
                                 val paint = Paint().apply {
                                     color = android.graphics.Color.TRANSPARENT
-                                    // 阴影向下偏移 16dp，模糊 24dp，在下方那 16dp 的空间里完美晕染到底边
                                     setShadowLayer(
                                         24.dp.toPx(),
                                         0f,
