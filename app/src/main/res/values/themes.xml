@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.StudyGate" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- 状态栏与导航栏全透明 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- 强制关闭系统导航栏的对比度遮罩 -->
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <!-- 确保应用绘制到系统栏后面 -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <!-- 状态栏图标变黑 -->
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
