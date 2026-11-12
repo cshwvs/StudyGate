@@ -333,6 +333,15 @@ fun ChatScreen(
         if (!isImeVisible) focusManager.clearFocus()
     }
 
+    // 【核心修复1】只要抽屉一关闭，强制瞬间砸下键盘
+    LaunchedEffect(isDrawerOpen) {
+        if (!isDrawerOpen) {
+            focusManager.clearFocus(force = true)
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(View(context).windowToken, 0)
+        }
+    }
+
     // 重命名弹窗
     if (showRenameDialogFor != null) {
         Dialog(onDismissRequest = { showRenameDialogFor = null }) {
@@ -505,7 +514,7 @@ fun ChatScreen(
                                         Popup(
                                             onDismissRequest = { showMenu = false },
                                             properties = PopupProperties(focusable = true),
-                                            // 【修改点1】x 轴从 170 改为了 190，往右移
+                                            // 【修改点1】x 轴改为了 450
                                             offset = IntOffset(x = 450.dp.value.roundToInt(), y = 0)
                                         ) {
                                             Box(
@@ -535,40 +544,52 @@ fun ChatScreen(
                                                                 )
                                                             }
                                                         }
-                                                        .background(Color.White, RoundedCornerShape(8.dp))
                                                 ) {
                                                     Column {
-                                                        // 【修改点2】每个 Text 的 clickable 前加上 .clip(RoundedCornerShape(8.dp))
-                                                        Text("重命名", fontSize = 12.sp, modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                            .clickable {
-                                                                renameInput = session.title
-                                                                showRenameDialogFor = session
-                                                                showMenu = false
-                                                            }
-                                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                        // 【修改点2】分别裁剪圆角并设置纯白背景
+                                                        Text(
+                                                            "重命名",
+                                                            fontSize = 12.sp,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 0.dp, bottomEnd = 0.dp))
+                                                                .background(Color.White)
+                                                                .clickable {
+                                                                    renameInput = session.title
+                                                                    showRenameDialogFor = session
+                                                                    showMenu = false
+                                                                }
+                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
                                                         )
 
-                                                        Text(if (session.isPinned) "取消置顶" else "置顶", fontSize = 12.sp, modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                            .clickable {
-                                                                session.isPinned = !session.isPinned
-                                                                onUpdateSessions(sessions.toList())
-                                                                showMenu = false
-                                                            }
-                                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                        Text(
+                                                            if (session.isPinned) "取消置顶" else "置顶",
+                                                            fontSize = 12.sp,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .clip(RoundedCornerShape(0.dp))
+                                                                .background(Color.White)
+                                                                .clickable {
+                                                                    session.isPinned = !session.isPinned
+                                                                    onUpdateSessions(sessions.toList())
+                                                                    showMenu = false
+                                                                }
+                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
                                                         )
 
-                                                        Text("删除", fontSize = 12.sp, color = Color.Red, modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                            .clickable {
-                                                                showDeleteDialogFor = session
-                                                                showMenu = false
-                                                            }
-                                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                        Text(
+                                                            "删除",
+                                                            fontSize = 12.sp,
+                                                            color = Color.Red,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 8.dp, bottomEnd = 8.dp))
+                                                                .background(Color.White)
+                                                                .clickable {
+                                                                    showDeleteDialogFor = session
+                                                                    showMenu = false
+                                                                }
+                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
                                                         )
                                                     }
                                                 }
@@ -583,7 +604,7 @@ fun ChatScreen(
             }
         }
     ) {
-        // 【绝对完美混合架构】Column + Box + 兜底白板，上中下三面全部锁死
+        // 【绝对完美混合架构】Column + Box + 动态兜底白板
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -603,16 +624,9 @@ fun ChatScreen(
                 }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // 1. 顶部物理隔断，彻底杜绝顶部穿透
+                // 1. 顶部物理隔断
                 CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            currentTitle,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textPrimary
-                        )
-                    },
+                    title = { Text(currentTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = textPrimary) },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "菜单", tint = textPrimary)
@@ -630,38 +644,26 @@ fun ChatScreen(
                     modifier = Modifier.statusBarsPadding()
                 )
 
-                // 2. 中间和底部混合区
+                // 2. 中间混合区
                 Box(modifier = Modifier.weight(1f)) {
 
                     val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    val imeHeight = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                    // 【核心修复3】动态计算底部安全界限。键盘打开时抬高界限，防止穿透到键盘下面
+                    val dynamicBottomInset = maxOf(imeHeight, navBarHeight)
 
-                    // 消息列表（铺满下层）
+                    // 消息列表
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        // 【核心修改点1】把 bottom 的 4.dp 改成 20.dp，让穿透界限往上移
-                        contentPadding = PaddingValues(
-                            top = 16.dp,
-                            start = 16.dp,
-                            end = 16.dp,
-                            bottom = navBarHeight + 18.dp
-                        ),
+                        // 动态界限 + 18.dp 的透视缝隙
+                        contentPadding = PaddingValues(top = 16.dp, start = 16.dp, end = 16.dp, bottom = dynamicBottomInset + 18.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(messages) { msg ->
                             if (msg.role == "user") {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    Surface(
-                                        color = userBubbleColor,
-                                        shape = RoundedCornerShape(16.dp),
-                                        modifier = Modifier.widthIn(max = 280.dp)
-                                    ) {
-                                        Text(
-                                            text = msg.content,
-                                            modifier = Modifier.padding(12.dp),
-                                            color = textPrimary,
-                                            fontSize = 12.sp,
-                                            lineHeight = 18.sp
-                                        )
+                                    Surface(color = userBubbleColor, shape = RoundedCornerShape(16.dp), modifier = Modifier.widthIn(max = 280.dp)) {
+                                        Text(text = msg.content, modifier = Modifier.padding(12.dp), color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
                                     }
                                 }
                             } else {
@@ -675,17 +677,15 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        if (isLoading) {
-                            item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) }
-                        }
+                        if (isLoading) { item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) } }
                     }
 
-                    // 【核心修改点2】底部纯白盾牌高度从 +8 变成 +20，配合列表把底线抬高
+                    // 动态底部纯白盾牌（键盘弹起时紧跟在键盘上方或隐藏，依靠 imePadding 的输入框）
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .height(navBarHeight + 20.dp)
+                            .height(if (isFocused) 18.dp else navBarHeight + 18.dp)
                             .background(Color.White)
                     )
 
@@ -697,7 +697,8 @@ fun ChatScreen(
                                 .fillMaxWidth()
                                 .then(if (isFocused) Modifier.imePadding() else Modifier)
                                 .padding(horizontal = 16.dp)
-                                .padding(bottom = navBarHeight + 4.dp)
+                                // 【核心修改】根据键盘状态自适应底部留白
+                                .padding(bottom = if (isFocused) 4.dp else navBarHeight + 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -731,7 +732,7 @@ fun ChatScreen(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                // 【修改点1】高度增加到 14.dp
+                                                // 输入框高度增加到 14.dp
                                                 .padding(horizontal = 16.dp, vertical = 14.dp)
                                                 .animateContentSize()
                                         ) {
@@ -740,20 +741,11 @@ fun ChatScreen(
                                                 onValueChange = { input = it },
                                                 interactionSource = interactionSource,
                                                 modifier = Modifier.fillMaxWidth(),
-                                                textStyle = TextStyle(
-                                                    fontSize = 12.sp,
-                                                    color = textPrimary,
-                                                    lineHeight = 16.sp
-                                                ),
+                                                textStyle = TextStyle(fontSize = 12.sp, color = textPrimary, lineHeight = 16.sp),
                                                 maxLines = 5,
                                                 decorationBox = { innerTextField ->
                                                     if (input.isEmpty()) {
-                                                        Text(
-                                                            "在此处发消息。深度思考已开",
-                                                            color = placeholderColor,
-                                                            fontSize = 12.sp,
-                                                            lineHeight = 16.sp
-                                                        )
+                                                        Text("在此处发消息。深度思考已开", color = placeholderColor, fontSize = 12.sp, lineHeight = 16.sp)
                                                     }
                                                     innerTextField()
                                                 }
@@ -761,36 +753,24 @@ fun ChatScreen(
                                         }
 
                                         Row(
-                                            // 【修改点2】增加 offset(y = -4.dp) 让整行按钮上移
-                                            modifier = Modifier.fillMaxWidth()
-                                                .padding(start = 12.dp, end = 8.dp, bottom = 4.dp)
+                                            // 这一行整体向上平移，且内边距改为 10 和 0
+                                            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, bottom = 4.dp)
                                                 .offset(y = (-4).dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.End
                                         ) {
                                             Surface(
-                                                // 【修改点3】圆角统一改为 24.dp
+                                                // 圆角统一 24.dp
                                                 shape = RoundedCornerShape(24.dp),
                                                 color = if (isSearchEnabled) Color(0xFFE8F0FE) else Color.Transparent,
-                                                border = BorderStroke(
-                                                    1.dp,
-                                                    if (isSearchEnabled) Color(0xFF1A73E8) else Color(0xFFDDDDDD)
-                                                ),
+                                                border = BorderStroke(1.dp, if (isSearchEnabled) Color(0xFF1A73E8) else Color(0xFFDDDDDD)),
                                                 modifier = Modifier.clip(RoundedCornerShape(24.dp)).clickable(
                                                     interactionSource = remember { MutableInteractionSource() },
                                                     indication = null
                                                 ) { isSearchEnabled = !isSearchEnabled }
                                             ) {
-                                                // 因为圆角变大了，水平 padding 也稍微给大一点点，视觉才协调
-                                                Row(
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 0.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        "智能搜索",
-                                                        color = if (isSearchEnabled) Color(0xFF1A73E8) else textPrimary,
-                                                        fontSize = 10.sp
-                                                    )
+                                                Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 0.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Text("智能搜索", color = if (isSearchEnabled) Color(0xFF1A73E8) else textPrimary, fontSize = 10.sp)
                                                 }
                                             }
                                             Spacer(modifier = Modifier.width(12.dp))
@@ -815,8 +795,7 @@ fun ChatScreen(
                                                             messages = newMsgs.toMutableList(),
                                                             timestamp = System.currentTimeMillis()
                                                         )
-                                                        val newSessions =
-                                                            sessions.map { if (it.id == currentSession.id) updatedSession else it }
+                                                        val newSessions = sessions.map { if (it.id == currentSession.id) updatedSession else it }
                                                         onUpdateSessions(newSessions)
 
                                                         val promptToSend = input
@@ -826,50 +805,23 @@ fun ChatScreen(
 
                                                         scope.launch {
                                                             if (globalApiKey.isBlank()) {
-                                                                val errMsgs = newMsgs + Message(
-                                                                    "assistant",
-                                                                    "请先去新建对话里填入 API Key！"
-                                                                )
-                                                                onUpdateSessions(newSessions.map {
-                                                                    if (it.id == currentSession.id) updatedSession.copy(
-                                                                        messages = errMsgs.toMutableList()
-                                                                    ) else it
-                                                                })
+                                                                val errMsgs = newMsgs + Message("assistant", "请先去新建对话里填入 API Key！")
+                                                                onUpdateSessions(newSessions.map { if (it.id == currentSession.id) updatedSession.copy(messages = errMsgs.toMutableList()) else it })
                                                                 isLoading = false
                                                                 return@launch
                                                             }
 
-                                                            val reply = ApiClient.chat(
-                                                                globalBaseUrl,
-                                                                globalApiKey,
-                                                                currentSession.model,
-                                                                promptToSend
-                                                            )
+                                                            val reply = ApiClient.chat(globalBaseUrl, globalApiKey, currentSession.model, promptToSend)
                                                             val finalMsgs = newMsgs + Message("assistant", reply)
-                                                            onUpdateSessions(newSessions.map {
-                                                                if (it.id == currentSession.id) updatedSession.copy(
-                                                                    messages = finalMsgs.toMutableList()
-                                                                ) else it
-                                                            })
+                                                            onUpdateSessions(newSessions.map { if (it.id == currentSession.id) updatedSession.copy(messages = finalMsgs.toMutableList()) else it })
                                                             isLoading = false
                                                         }
                                                     },
                                                     modifier = Modifier.size(24.dp),
                                                     contentPadding = PaddingValues(0.dp),
                                                     shape = CircleShape,
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = Color(
-                                                            0xFF1A73E8
-                                                        )
-                                                    )
-                                                ) {
-                                                    Text(
-                                                        "↑",
-                                                        color = Color.White,
-                                                        fontSize = 12.sp,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
+                                                ) { Text("↑", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                                             }
                                         }
                                     }
