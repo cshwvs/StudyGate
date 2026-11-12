@@ -505,7 +505,8 @@ fun ChatScreen(
                                         Popup(
                                             onDismissRequest = { showMenu = false },
                                             properties = PopupProperties(focusable = true),
-                                            offset = IntOffset(x = 170.dp.value.roundToInt(), y = 0)
+                                            // 【修改点1】x 轴从 170 改为了 190，往右移
+                                            offset = IntOffset(x = 450.dp.value.roundToInt(), y = 0)
                                         ) {
                                             Box(
                                                 modifier = Modifier.graphicsLayer {
@@ -537,22 +538,38 @@ fun ChatScreen(
                                                         .background(Color.White, RoundedCornerShape(8.dp))
                                                 ) {
                                                     Column {
-                                                        Text("重命名", fontSize = 12.sp, modifier = Modifier.fillMaxWidth().clickable {
-                                                            renameInput = session.title
-                                                            showRenameDialogFor = session
-                                                            showMenu = false
-                                                        }.padding(horizontal = 12.dp, vertical = 8.dp))
+                                                        // 【修改点2】每个 Text 的 clickable 前加上 .clip(RoundedCornerShape(8.dp))
+                                                        Text("重命名", fontSize = 12.sp, modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .clickable {
+                                                                renameInput = session.title
+                                                                showRenameDialogFor = session
+                                                                showMenu = false
+                                                            }
+                                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                        )
 
-                                                        Text(if (session.isPinned) "取消置顶" else "置顶", fontSize = 12.sp, modifier = Modifier.fillMaxWidth().clickable {
-                                                            session.isPinned = !session.isPinned
-                                                            onUpdateSessions(sessions.toList())
-                                                            showMenu = false
-                                                        }.padding(horizontal = 12.dp, vertical = 8.dp))
+                                                        Text(if (session.isPinned) "取消置顶" else "置顶", fontSize = 12.sp, modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .clickable {
+                                                                session.isPinned = !session.isPinned
+                                                                onUpdateSessions(sessions.toList())
+                                                                showMenu = false
+                                                            }
+                                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                        )
 
-                                                        Text("删除", fontSize = 12.sp, color = Color.Red, modifier = Modifier.fillMaxWidth().clickable {
-                                                            showDeleteDialogFor = session
-                                                            showMenu = false
-                                                        }.padding(horizontal = 12.dp, vertical = 8.dp))
+                                                        Text("删除", fontSize = 12.sp, color = Color.Red, modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .clickable {
+                                                                showDeleteDialogFor = session
+                                                                showMenu = false
+                                                            }
+                                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                        )
                                                     }
                                                 }
                                             }
