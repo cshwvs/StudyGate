@@ -400,8 +400,9 @@ fun ChatScreen(
                         Button(
                             onClick = {
                                 val target = showRenameDialogFor!!
-                                target.title = if (renameInput.isBlank()) "未命名" else renameInput
-                                onUpdateSessions(sessions.map { if (it.id == target.id) target else it })
+                                val newTitle = if (renameInput.isBlank()) "未命名" else renameInput
+                                // 【修复】使用 copy 生成新对象，强制 Compose 刷新 UI
+                                onUpdateSessions(sessions.map { if (it.id == target.id) it.copy(title = newTitle) else it })
                                 showRenameDialogFor = null
                             },
                             modifier = Modifier.weight(1f),
@@ -462,13 +463,12 @@ fun ChatScreen(
                         .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
                 ) {
                     Column(modifier = Modifier.fillMaxSize().imePadding().statusBarsPadding().padding(16.dp)) {
-                        // 【核心修复】去掉 fillMaxHeight，改为固定高度，彻底杜绝撑满
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = Color(0xFFF5F5F5),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(40.dp) // 固定高度
+                                .height(40.dp)
                                 .padding(vertical = 2.dp)
                         ) {
                             Row(
@@ -623,8 +623,8 @@ fun ChatScreen(
                                                                     .clip(RoundedCornerShape(0.dp))
                                                                     .background(Color.White)
                                                                     .clickable {
-                                                                        session.isPinned = !session.isPinned
-                                                                        onUpdateSessions(sessions.toList())
+                                                                        // 【修复】置顶逻辑也使用 copy 生成新对象
+                                                                        onUpdateSessions(sessions.map { if (it.id == session.id) it.copy(isPinned = !it.isPinned) else it })
                                                                         showMenu = false
                                                                     }
                                                                     .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -712,7 +712,6 @@ fun ChatScreen(
                 ) {
                     val gap = if (isDrawerOpen) 0.dp else 68.dp
 
-                    // 【核心修复】回归绝对分离的if-else，不嵌套在列表里
                     if (messages.isEmpty() && !isLoading) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
@@ -792,7 +791,8 @@ fun ChatScreen(
                             .background(Color.White)
                     )
 
-                    val showScrollBtn = listState.canScrollForward
+                    // 【修改点】拉出抽屉时隐藏按钮
+                    val showScrollBtn = listState.canScrollForward && !isDrawerOpen
                     val scrollBtnAlpha by animateFloatAsState(
                         targetValue = if (showScrollBtn) 1f else 0f,
                         animationSpec = tween(durationMillis = 200),
@@ -807,7 +807,8 @@ fun ChatScreen(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(end = 20.dp, bottom = gap + 16.dp)
+                            // 【修改点】位置往上移动了 16dp，变成 gap + 32.dp
+                            .padding(end = 20.dp, bottom = gap + 32.dp)
                     ) {
                         if (scrollBtnAlpha > 0f) {
                             Surface(
@@ -826,7 +827,6 @@ fun ChatScreen(
                                         indication = null
                                     ) {
                                         scope.launch {
-                                            // 使用 layoutInfo 获取总条目数并滚到最底
                                             if (listState.layoutInfo.totalItemsCount > 0) {
                                                 listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
                                             }
@@ -837,7 +837,8 @@ fun ChatScreen(
                                     Icon(
                                         Icons.Default.KeyboardArrowDown,
                                         contentDescription = "回到底部",
-                                        tint = Color(0xFF416EFD)
+                                        // 【修改点】颜色与加号保持一致，用 textPrimary
+                                        tint = textPrimary
                                     )
                                 }
                             }
