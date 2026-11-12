@@ -672,7 +672,7 @@ fun ChatScreen(
                             .background(Color.White)
                     )
 
-                    // 悬浮输入框（带有阴影和圆角，左右留空给消息穿透）
+                    // 悬浮输入框
                     if (!isDrawerOpen) {
                         Box(
                             modifier = Modifier
@@ -680,7 +680,7 @@ fun ChatScreen(
                                 .fillMaxWidth()
                                 .then(if (isFocused) Modifier.imePadding() else Modifier)
                                 .padding(horizontal = 16.dp)
-                                .padding(bottom = navBarHeight + 4.dp) // 输入框依然极限贴底，不往上走
+                                .padding(bottom = navBarHeight + 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -714,7 +714,8 @@ fun ChatScreen(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                                // 【修改点1】高度增加到 14.dp
+                                                .padding(horizontal = 16.dp, vertical = 14.dp)
                                                 .animateContentSize()
                                         ) {
                                             BasicTextField(
@@ -743,23 +744,27 @@ fun ChatScreen(
                                         }
 
                                         Row(
+                                            // 【修改点2】增加 offset(y = -4.dp) 让整行按钮上移
                                             modifier = Modifier.fillMaxWidth()
-                                                .padding(start = 12.dp, end = 8.dp, bottom = 4.dp),
+                                                .padding(start = 12.dp, end = 8.dp, bottom = 4.dp)
+                                                .offset(y = (-4).dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.End
                                         ) {
                                             Surface(
-                                                shape = RoundedCornerShape(10.dp),
+                                                // 【修改点3】圆角统一改为 24.dp
+                                                shape = RoundedCornerShape(24.dp),
                                                 color = if (isSearchEnabled) Color(0xFFE8F0FE) else Color.Transparent,
                                                 border = BorderStroke(
                                                     1.dp,
                                                     if (isSearchEnabled) Color(0xFF1A73E8) else Color(0xFFDDDDDD)
                                                 ),
-                                                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(
+                                                modifier = Modifier.clip(RoundedCornerShape(24.dp)).clickable(
                                                     interactionSource = remember { MutableInteractionSource() },
                                                     indication = null
                                                 ) { isSearchEnabled = !isSearchEnabled }
                                             ) {
+                                                // 因为圆角变大了，水平 padding 也稍微给大一点点，视觉才协调
                                                 Row(
                                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 0.dp),
                                                     verticalAlignment = Alignment.CenterVertically
