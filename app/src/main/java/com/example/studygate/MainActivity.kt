@@ -14,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.BorderStroke
@@ -28,12 +29,14 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -239,7 +242,6 @@ fun SetupScreen(
 
     Scaffold(
         modifier = Modifier
-            // 全屏右滑返回手势
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
@@ -328,6 +330,8 @@ fun ChatScreen(
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     val isImeVisible = WindowInsets.isImeVisible
+
+    val listState = rememberLazyListState()
 
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -440,7 +444,6 @@ fun ChatScreen(
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(16.dp),
-                            // 【修改点1】删除按钮背景改为 #FFEBEB
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFEBEB))
                         ) { Text("删除", color = Color(0xFFDF3E3F), fontSize = 12.sp) }
                     }
@@ -459,11 +462,25 @@ fun ChatScreen(
                         .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
                 ) {
                     Column(modifier = Modifier.fillMaxSize().imePadding().statusBarsPadding().padding(16.dp)) {
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF5F5F5), modifier = Modifier.fillMaxWidth().height(36.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp).fillMaxHeight()) {
+                        // 【核心修复】去掉 fillMaxHeight，改为固定高度，彻底杜绝撑满
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFF5F5F5),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp) // 固定高度
+                                .padding(vertical = 2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 12.dp)
+                            ) {
                                 Icon(Icons.Default.Search, contentDescription = null, tint = textSecondary, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Box(modifier = Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                                     BasicTextField(
                                         value = searchQuery,
                                         onValueChange = { searchQuery = it },
@@ -471,10 +488,8 @@ fun ChatScreen(
                                         textStyle = TextStyle(fontSize = 12.sp, color = textPrimary),
                                         singleLine = true,
                                         decorationBox = { innerTextField ->
-                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
-                                                if (searchQuery.isEmpty()) Text("搜索聊天内容...", color = textSecondary, fontSize = 12.sp)
-                                                innerTextField()
-                                            }
+                                            if (searchQuery.isEmpty()) Text("搜索聊天内容...", color = textSecondary, fontSize = 12.sp)
+                                            innerTextField()
                                         }
                                     )
                                 }
@@ -483,7 +498,7 @@ fun ChatScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        LazyColumn {
+                        LazyColumn(modifier = Modifier.weight(1f)) {
                             val filteredSessions = if (searchQuery.isBlank()) {
                                 sessions
                             } else {
@@ -650,7 +665,6 @@ fun ChatScreen(
                 .pointerInput(isDrawerOpen) {
                     detectTapGestures(onTap = {
                         if (isDrawerOpen) {
-                            // 瞬间砸下键盘
                             focusManager.clearFocus(force = true)
                             val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
                             imm.hideSoftInputFromWindow(View(context).windowToken, 0)
@@ -698,51 +712,75 @@ fun ChatScreen(
                 ) {
                     val gap = if (isDrawerOpen) 0.dp else 68.dp
 
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            top = 16.dp,
-                            start = 16.dp,
-                            end = 16.dp,
-                            bottom = gap
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(28.dp)
-                    ) {
-                        items(messages) { msg ->
-                            if (msg.role == "user") {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    Surface(
-                                        color = userBubbleColor,
-                                        shape = RoundedCornerShape(16.dp),
-                                        modifier = Modifier.widthIn(max = 280.dp)
-                                    ) {
-                                        Text(
-                                            text = msg.content,
-                                            modifier = Modifier.padding(12.dp),
-                                            color = textPrimary,
-                                            fontSize = 12.sp,
-                                            lineHeight = 18.sp
-                                        )
-                                    }
-                                }
-                            } else {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("已思考 (用时 2 秒)", color = textSecondary, fontSize = 12.sp)
-                                        Text(" ∨", color = textSecondary, fontSize = 12.sp)
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(text = msg.content, color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
+                    // 【核心修复】回归绝对分离的if-else，不嵌套在列表里
+                    if (messages.isEmpty() && !isLoading) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Hi，有什么可以帮到你的吗？",
+                                color = Color(0xFF1A1A1A),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                top = 16.dp,
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = gap
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(28.dp)
+                        ) {
+                            if (messages.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        "回答由AI生成，仅供参考",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center,
+                                        color = Color.LightGray,
+                                        fontSize = 10.sp
+                                    )
                                 }
                             }
-                        }
-                        if (isLoading) {
-                            item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) }
-                        }
 
-                        // 【修改点】高度从 0.dp 改成 20.dp，增加最后一条消息的段后距
-                        if (messages.isNotEmpty()) {
-                            item { Spacer(modifier = Modifier.height(24.dp)) }
+                            items(messages) { msg ->
+                                if (msg.role == "user") {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                        Surface(
+                                            color = userBubbleColor,
+                                            shape = RoundedCornerShape(16.dp),
+                                            modifier = Modifier.widthIn(max = 280.dp)
+                                        ) {
+                                            Text(
+                                                text = msg.content,
+                                                modifier = Modifier.padding(12.dp),
+                                                color = textPrimary,
+                                                fontSize = 12.sp,
+                                                lineHeight = 18.sp
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("已思考 (用时 2 秒)", color = textSecondary, fontSize = 12.sp)
+                                            Text(" ∨", color = textSecondary, fontSize = 12.sp)
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(text = msg.content, color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
+                                    }
+                                }
+                            }
+                            if (isLoading) {
+                                item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) }
+                            }
+
+                            if (messages.isNotEmpty()) {
+                                item { Spacer(modifier = Modifier.height(24.dp)) }
+                            }
                         }
                     }
 
@@ -753,6 +791,58 @@ fun ChatScreen(
                             .height(gap)
                             .background(Color.White)
                     )
+
+                    val showScrollBtn = listState.canScrollForward
+                    val scrollBtnAlpha by animateFloatAsState(
+                        targetValue = if (showScrollBtn) 1f else 0f,
+                        animationSpec = tween(durationMillis = 200),
+                        label = "scrollBtnAlpha"
+                    )
+                    val scrollBtnScale by animateFloatAsState(
+                        targetValue = if (showScrollBtn) 1f else 0.8f,
+                        animationSpec = tween(durationMillis = 200),
+                        label = "scrollBtnScale"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 20.dp, bottom = gap + 16.dp)
+                    ) {
+                        if (scrollBtnAlpha > 0f) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White,
+                                shadowElevation = 4.dp,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .graphicsLayer {
+                                        alpha = scrollBtnAlpha
+                                        scaleX = scrollBtnScale
+                                        scaleY = scrollBtnScale
+                                    }
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        scope.launch {
+                                            // 使用 layoutInfo 获取总条目数并滚到最底
+                                            if (listState.layoutInfo.totalItemsCount > 0) {
+                                                listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                                            }
+                                        }
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "回到底部",
+                                        tint = Color(0xFF416EFD)
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     if (!isDrawerOpen) {
                         Box(
@@ -917,12 +1007,12 @@ fun ChatScreen(
                                                     contentPadding = PaddingValues(0.dp),
                                                     shape = CircleShape,
                                                     colors = ButtonDefaults.buttonColors(
-                                                        containerColor = Color(0xFFECF2FE)
+                                                        containerColor = Color(0xFF416EFD)
                                                     )
                                                 ) {
                                                     Text(
                                                         "↑",
-                                                        color = Color(0xFF416EFD),
+                                                        color = Color.White,
                                                         fontSize = 12.sp,
                                                         fontWeight = FontWeight.Bold
                                                     )
