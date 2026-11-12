@@ -21,6 +21,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 核心隔断：禁止系统压缩窗口，彻底斩断键盘对底层布局的拉扯
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
 
         enableEdgeToEdge(
@@ -233,7 +235,25 @@ fun SetupScreen(
     var apiKey by remember { mutableStateOf(initialApiKey) }
     var model by remember { mutableStateOf(initialModel) }
 
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+
     Scaffold(
+        modifier = Modifier
+            // 全屏右滑返回手势
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (dragOffset > 150f) {
+                            navController.popBackStack()
+                        }
+                        dragOffset = 0f
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        dragOffset += dragAmount
+                    }
+                )
+            },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("新建对话", fontSize = 16.sp, fontWeight = FontWeight.Medium) },
@@ -252,13 +272,13 @@ fun SetupScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val textFieldColors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF1A73E8),
+                focusedBorderColor = Color(0xFFECF2FE),
                 unfocusedBorderColor = Color(0xFFE0E0E0),
-                focusedLabelColor = Color(0xFF1A73E8),
+                focusedLabelColor = Color(0xFFECF2FE),
                 unfocusedLabelColor = Color(0xFF888888),
-                cursorColor = Color(0xFF1A73E8)
+                cursorColor = Color(0xFFECF2FE)
             )
-            val textFieldShape = RoundedCornerShape(12.dp)
+            val textFieldShape = RoundedCornerShape(16.dp)
 
             OutlinedTextField(
                 value = title, onValueChange = { title = it }, label = { Text("对话名称", fontSize = 12.sp) },
@@ -284,9 +304,9 @@ fun SetupScreen(
             Button(
                 onClick = { onSave(title, baseUrl, apiKey, model) },
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
-            ) { Text("保存并进入对话", fontSize = 14.sp) }
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFECF2FE))
+            ) { Text("保存并进入对话", fontSize = 14.sp, color = Color(0xFF416EFD)) }
         }
     }
 }
@@ -352,17 +372,12 @@ fun ChatScreen(
                 Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("重命名对话", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textPrimary)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFF5F5F5),
-                        modifier = Modifier.fillMaxWidth().height(40.dp)
-                    ) {
+                    Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF5F5F5), modifier = Modifier.fillMaxWidth().height(40.dp)) {
                         BasicTextField(
                             value = renameInput,
                             onValueChange = { renameInput = it },
                             textStyle = TextStyle(fontSize = 12.sp, color = textPrimary),
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)
-                                .wrapContentHeight(Alignment.CenterVertically),
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp).wrapContentHeight(Alignment.CenterVertically),
                             singleLine = true,
                             decorationBox = { innerTextField ->
                                 if (renameInput.isEmpty()) Text("输入新名字", color = textSecondary, fontSize = 12.sp)
@@ -375,6 +390,7 @@ fun ChatScreen(
                         Button(
                             onClick = { showRenameDialogFor = null },
                             modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF0F0F0))
                         ) { Text("取消", color = textSecondary, fontSize = 12.sp) }
                         Button(
@@ -385,8 +401,9 @@ fun ChatScreen(
                                 showRenameDialogFor = null
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
-                        ) { Text("确定", color = Color.White, fontSize = 12.sp) }
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFECF2FE))
+                        ) { Text("确定", color = Color(0xFF416EFD), fontSize = 12.sp) }
                     }
                 }
             }
@@ -401,18 +418,14 @@ fun ChatScreen(
                     Text("永久删除对话", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textPrimary)
                     Spacer(modifier = Modifier.height(8.dp))
                     Box(modifier = Modifier.fillMaxWidth().height(36.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            "删除后，该对话将不可恢复，确认删除？",
-                            fontSize = 12.sp,
-                            color = textSecondary,
-                            textAlign = TextAlign.Center
-                        )
+                        Text("删除后，该对话将不可恢复，确认删除？", fontSize = 12.sp, color = textSecondary, textAlign = TextAlign.Center)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             onClick = { showDeleteDialogFor = null },
                             modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF0F0F0))
                         ) { Text("取消", color = textSecondary, fontSize = 12.sp) }
                         Button(
@@ -426,8 +439,10 @@ fun ChatScreen(
                                 showDeleteDialogFor = null
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                        ) { Text("删除", color = Color.White, fontSize = 12.sp) }
+                            shape = RoundedCornerShape(16.dp),
+                            // 【修改点1】删除按钮背景改为 #FFEBEB
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFEBEB))
+                        ) { Text("删除", color = Color(0xFFDF3E3F), fontSize = 12.sp) }
                     }
                 }
             }
@@ -438,222 +453,183 @@ fun ChatScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(drawerContainerColor = Color.White, modifier = Modifier.width(300.dp).fillMaxHeight()) {
-                Column(modifier = Modifier.fillMaxSize().imePadding().statusBarsPadding().padding(16.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFF5F5F5),
-                        modifier = Modifier.fillMaxWidth().height(36.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp).fillMaxHeight()
-                        ) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                tint = textSecondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                BasicTextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textStyle = TextStyle(fontSize = 12.sp, color = textPrimary),
-                                    singleLine = true,
-                                    decorationBox = { innerTextField ->
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.CenterStart
-                                        ) {
-                                            if (searchQuery.isEmpty()) Text(
-                                                "搜索聊天内容...",
-                                                color = textSecondary,
-                                                fontSize = 12.sp
-                                            )
-                                            innerTextField()
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    LazyColumn {
-                        val filteredSessions = if (searchQuery.isBlank()) {
-                            sessions
-                        } else {
-                            sessions.filter { it.title.contains(searchQuery, ignoreCase = true) }
-                        }
-
-                        val sortedSessions =
-                            filteredSessions.sortedWith(compareByDescending<ChatSession> { it.isPinned }.thenByDescending { it.timestamp })
-
-                        val grouped = sortedSessions.groupBy {
-                            val diff = System.currentTimeMillis() - it.timestamp
-                            when {
-                                diff < 24 * 60 * 60 * 1000 -> "今天"
-                                diff < 48 * 60 * 60 * 1000 -> "昨天"
-                                diff < 7 * 24 * 60 * 60 * 1000 -> "7天内"
-                                else -> {
-                                    val sdf = SimpleDateFormat("yyyy年M月d日", Locale.getDefault())
-                                    sdf.format(Date(it.timestamp))
-                                }
-                            }
-                        }
-
-                        for ((groupName, groupSessions) in grouped) {
-                            item {
-                                Text(
-                                    groupName,
-                                    color = textSecondary,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
-                                )
-                            }
-
-                            items(groupSessions) { session ->
-                                var showMenu by remember { mutableStateOf(false) }
-                                var isPopupVisible by remember { mutableStateOf(false) }
-                                if (showMenu) {
-                                    isPopupVisible = true
-                                }
-
-                                Box {
-                                    Text(
-                                        text = (if (session.isPinned) "[置顶] " else "") + session.title,
-                                        color = if (session.id == currentSessionId) Color(0xFF1A73E8) else textPrimary,
-                                        fontSize = 12.sp,
-                                        maxLines = 1,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .combinedClickable(
-                                                onClick = {
-                                                    onSwitchSession(session.id)
-                                                    scope.launch { drawerState.close() }
-                                                },
-                                                onLongClick = { showMenu = true }
-                                            )
-                                            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp)
-                                    )
-
-                                    if (isPopupVisible) {
-                                        val transition = updateTransition(targetState = showMenu, label = "menu")
-                                        val scale by transition.animateFloat(
-                                            transitionSpec = { tween(150) },
-                                            label = "scale"
-                                        ) { if (it) 1f else 0.8f }
-                                        val alpha by transition.animateFloat(
-                                            transitionSpec = { tween(150) },
-                                            label = "alpha"
-                                        ) { if (it) 1f else 0f }
-
-                                        LaunchedEffect(showMenu) {
-                                            if (!showMenu) {
-                                                delay(150)
-                                                isPopupVisible = false
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
+                ) {
+                    Column(modifier = Modifier.fillMaxSize().imePadding().statusBarsPadding().padding(16.dp)) {
+                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF5F5F5), modifier = Modifier.fillMaxWidth().height(36.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp).fillMaxHeight()) {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = textSecondary, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+                                    BasicTextField(
+                                        value = searchQuery,
+                                        onValueChange = { searchQuery = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(fontSize = 12.sp, color = textPrimary),
+                                        singleLine = true,
+                                        decorationBox = { innerTextField ->
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                                                if (searchQuery.isEmpty()) Text("搜索聊天内容...", color = textSecondary, fontSize = 12.sp)
+                                                innerTextField()
                                             }
                                         }
+                                    )
+                                }
+                            }
+                        }
 
-                                        Popup(
-                                            onDismissRequest = { showMenu = false },
-                                            properties = PopupProperties(focusable = true),
-                                            offset = IntOffset(x = 450.dp.value.roundToInt(), y = 0)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        LazyColumn {
+                            val filteredSessions = if (searchQuery.isBlank()) {
+                                sessions
+                            } else {
+                                sessions.filter { it.title.contains(searchQuery, ignoreCase = true) }
+                            }
+
+                            val sortedSessions = filteredSessions.sortedWith(compareByDescending<ChatSession> { it.isPinned }.thenByDescending { it.timestamp })
+
+                            val grouped = sortedSessions.groupBy {
+                                val diff = System.currentTimeMillis() - it.timestamp
+                                when {
+                                    diff < 24 * 60 * 60 * 1000 -> "今天"
+                                    diff < 48 * 60 * 60 * 1000 -> "昨天"
+                                    diff < 7 * 24 * 60 * 60 * 1000 -> "7天内"
+                                    else -> {
+                                        val sdf = SimpleDateFormat("yyyy年M月d日", Locale.getDefault())
+                                        sdf.format(Date(it.timestamp))
+                                    }
+                                }
+                            }
+
+                            for ((groupName, groupSessions) in grouped) {
+                                item { Text(groupName, color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)) }
+
+                                items(groupSessions) { session ->
+                                    var showMenu by remember { mutableStateOf(false) }
+                                    var isPopupVisible by remember { mutableStateOf(false) }
+                                    if (showMenu) { isPopupVisible = true }
+
+                                    val isCurrent = session.id == currentSessionId
+
+                                    Box {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(if (isCurrent) Color(0xFFECF2FE) else Color.Transparent)
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        onSwitchSession(session.id)
+                                                        scope.launch { drawerState.close() }
+                                                    },
+                                                    onLongClick = { showMenu = true }
+                                                )
+                                                .padding(start = 12.dp, top = 8.dp, bottom = 8.dp)
                                         ) {
-                                            Box(
-                                                modifier = Modifier.graphicsLayer {
-                                                    scaleX = scale
-                                                    scaleY = scale
-                                                    this.alpha = alpha
+                                            Text(
+                                                text = (if (session.isPinned) "[置顶] " else "") + session.title,
+                                                color = if (isCurrent) Color(0xFF416EFD) else textPrimary,
+                                                fontSize = 12.sp,
+                                                maxLines = 1
+                                            )
+                                        }
+
+                                        if (isPopupVisible) {
+                                            val transition = updateTransition(targetState = showMenu, label = "menu")
+                                            val scale by transition.animateFloat(transitionSpec = { tween(150) }, label = "scale") { if (it) 1f else 0.8f }
+                                            val alpha by transition.animateFloat(transitionSpec = { tween(150) }, label = "alpha") { if (it) 1f else 0f }
+
+                                            LaunchedEffect(showMenu) {
+                                                if (!showMenu) {
+                                                    delay(150)
+                                                    isPopupVisible = false
                                                 }
+                                            }
+
+                                            Popup(
+                                                onDismissRequest = { showMenu = false },
+                                                properties = PopupProperties(focusable = true),
+                                                offset = IntOffset(x = 450.dp.value.roundToInt(), y = 0)
                                             ) {
                                                 Box(
-                                                    modifier = Modifier
-                                                        .width(100.dp)
-                                                        .drawBehind {
-                                                            val paint = Paint().apply {
-                                                                color = android.graphics.Color.TRANSPARENT
-                                                                setShadowLayer(
-                                                                    12.dp.toPx(),
-                                                                    4.dp.toPx(),
-                                                                    4.dp.toPx(),
-                                                                    android.graphics.Color.argb(40, 0, 0, 0)
-                                                                )
-                                                            }
-                                                            drawIntoCanvas {
-                                                                it.nativeCanvas.drawRoundRect(
-                                                                    0f, 0f, size.width, size.height,
-                                                                    8.dp.toPx(), 8.dp.toPx(), paint
-                                                                )
-                                                            }
-                                                        }
+                                                    modifier = Modifier.graphicsLayer {
+                                                        scaleX = scale
+                                                        scaleY = scale
+                                                        this.alpha = alpha
+                                                    }
                                                 ) {
-                                                    Column {
-                                                        Text(
-                                                            "重命名",
-                                                            fontSize = 12.sp,
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .clip(
-                                                                    RoundedCornerShape(
-                                                                        topStart = 8.dp,
-                                                                        topEnd = 8.dp,
-                                                                        bottomStart = 0.dp,
-                                                                        bottomEnd = 0.dp
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .width(100.dp)
+                                                            .drawBehind {
+                                                                val paint = Paint().apply {
+                                                                    color = android.graphics.Color.TRANSPARENT
+                                                                    setShadowLayer(
+                                                                        12.dp.toPx(),
+                                                                        4.dp.toPx(),
+                                                                        4.dp.toPx(),
+                                                                        android.graphics.Color.argb(40, 0, 0, 0)
                                                                     )
-                                                                )
-                                                                .background(Color.White)
-                                                                .clickable {
-                                                                    renameInput = session.title
-                                                                    showRenameDialogFor = session
-                                                                    showMenu = false
                                                                 }
-                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                                        )
-
-                                                        Text(
-                                                            if (session.isPinned) "取消置顶" else "置顶",
-                                                            fontSize = 12.sp,
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .clip(RoundedCornerShape(0.dp))
-                                                                .background(Color.White)
-                                                                .clickable {
-                                                                    session.isPinned = !session.isPinned
-                                                                    onUpdateSessions(sessions.toList())
-                                                                    showMenu = false
-                                                                }
-                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                                        )
-
-                                                        Text(
-                                                            "删除",
-                                                            fontSize = 12.sp,
-                                                            color = Color.Red,
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .clip(
-                                                                    RoundedCornerShape(
-                                                                        topStart = 0.dp,
-                                                                        topEnd = 0.dp,
-                                                                        bottomStart = 8.dp,
-                                                                        bottomEnd = 8.dp
+                                                                drawIntoCanvas {
+                                                                    it.nativeCanvas.drawRoundRect(
+                                                                        0f, 0f, size.width, size.height,
+                                                                        16.dp.toPx(), 16.dp.toPx(), paint
                                                                     )
-                                                                )
-                                                                .background(Color.White)
-                                                                .clickable {
-                                                                    showDeleteDialogFor = session
-                                                                    showMenu = false
                                                                 }
-                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                                        )
+                                                            }
+                                                    ) {
+                                                        Column {
+                                                            Text(
+                                                                "重命名",
+                                                                fontSize = 12.sp,
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 0.dp, bottomEnd = 0.dp))
+                                                                    .background(Color.White)
+                                                                    .clickable {
+                                                                        renameInput = session.title
+                                                                        showRenameDialogFor = session
+                                                                        showMenu = false
+                                                                    }
+                                                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                            )
+
+                                                            Text(
+                                                                if (session.isPinned) "取消置顶" else "置顶",
+                                                                fontSize = 12.sp,
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clip(RoundedCornerShape(0.dp))
+                                                                    .background(Color.White)
+                                                                    .clickable {
+                                                                        session.isPinned = !session.isPinned
+                                                                        onUpdateSessions(sessions.toList())
+                                                                        showMenu = false
+                                                                    }
+                                                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                            )
+
+                                                            Text(
+                                                                "删除",
+                                                                fontSize = 12.sp,
+                                                                color = Color(0xFFDF3E3F),
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
+                                                                    .background(Color.White)
+                                                                    .clickable {
+                                                                        showDeleteDialogFor = session
+                                                                        showMenu = false
+                                                                    }
+                                                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -667,7 +643,6 @@ fun ChatScreen(
             }
         }
     ) {
-        // 绝对完美混合架构
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -687,16 +662,8 @@ fun ChatScreen(
                 }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // 1. 顶部物理隔断
                 CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            currentTitle,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textPrimary
-                        )
-                    },
+                    title = { Text(currentTitle, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = textPrimary) },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "菜单", tint = textPrimary)
@@ -714,11 +681,9 @@ fun ChatScreen(
                     modifier = Modifier.statusBarsPadding()
                 )
 
-                // 2. 中间和底部混合区
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        // 隔离键盘逻辑保持不变
                         .then(
                             if (!isDrawerOpen) {
                                 Modifier
@@ -731,10 +696,8 @@ fun ChatScreen(
                             }
                         )
                 ) {
-                    // 【修改点】动态界限：抽屉打开时为 0dp（消息完全铺满），关闭时为 68dp
                     val gap = if (isDrawerOpen) 0.dp else 68.dp
 
-                    // 消息列表
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -743,7 +706,7 @@ fun ChatScreen(
                             end = 16.dp,
                             bottom = gap
                         ),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(28.dp)
                     ) {
                         items(messages) { msg ->
                             if (msg.role == "user") {
@@ -776,9 +739,13 @@ fun ChatScreen(
                         if (isLoading) {
                             item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) }
                         }
+
+                        // 【修改点】高度从 0.dp 改成 20.dp，增加最后一条消息的段后距
+                        if (messages.isNotEmpty()) {
+                            item { Spacer(modifier = Modifier.height(24.dp)) }
+                        }
                     }
 
-                    // 底部纯白盾牌，高度跟随动态 gap
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -787,7 +754,6 @@ fun ChatScreen(
                             .background(Color.White)
                     )
 
-                    // 悬浮输入框（抽屉打开时直接隐藏，完美配合底部全显示）
                     if (!isDrawerOpen) {
                         Box(
                             modifier = Modifier
@@ -864,13 +830,13 @@ fun ChatScreen(
                                             horizontalArrangement = Arrangement.End
                                         ) {
                                             Surface(
-                                                shape = RoundedCornerShape(24.dp),
-                                                color = if (isSearchEnabled) Color(0xFFE8F0FE) else Color.Transparent,
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = if (isSearchEnabled) Color(0xFFECF2FE) else Color.Transparent,
                                                 border = BorderStroke(
                                                     1.dp,
-                                                    if (isSearchEnabled) Color(0xFF1A73E8) else Color(0xFFDDDDDD)
+                                                    if (isSearchEnabled) Color(0xFFD6E3F6) else Color(0xFFDDDDDD)
                                                 ),
-                                                modifier = Modifier.clip(RoundedCornerShape(24.dp)).clickable(
+                                                modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable(
                                                     interactionSource = remember { MutableInteractionSource() },
                                                     indication = null
                                                 ) { isSearchEnabled = !isSearchEnabled }
@@ -881,7 +847,7 @@ fun ChatScreen(
                                                 ) {
                                                     Text(
                                                         "智能搜索",
-                                                        color = if (isSearchEnabled) Color(0xFF1A73E8) else textPrimary,
+                                                        color = if (isSearchEnabled) Color(0xFF416EFD) else textPrimary,
                                                         fontSize = 10.sp
                                                     )
                                                 }
@@ -951,12 +917,12 @@ fun ChatScreen(
                                                     contentPadding = PaddingValues(0.dp),
                                                     shape = CircleShape,
                                                     colors = ButtonDefaults.buttonColors(
-                                                        containerColor = Color(0xFF1A73E8)
+                                                        containerColor = Color(0xFFECF2FE)
                                                     )
                                                 ) {
                                                     Text(
                                                         "↑",
-                                                        color = Color.White,
+                                                        color = Color(0xFF416EFD),
                                                         fontSize = 12.sp,
                                                         fontWeight = FontWeight.Bold
                                                     )
