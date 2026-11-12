@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -75,6 +76,8 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
 
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
@@ -715,24 +718,29 @@ fun ChatScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        // 【防卡顿核心】让底层的物理动画来推起整个面板
-                        .then(if (isImeVisible) Modifier.imePadding() else Modifier.navigationBarsPadding())
+                        // 隔离键盘逻辑保持不变
+                        .then(
+                            if (!isDrawerOpen) {
+                                Modifier
+                                    .imePadding()
+                                    .navigationBarsPadding()
+                            } else {
+                                Modifier
+                                    .navigationBarsPadding()
+                                    .consumeWindowInsets(WindowInsets.ime)
+                            }
+                        )
                 ) {
+                    // 【修改点】动态界限：抽屉打开时为 0dp（消息完全铺满），关闭时为 68dp
+                    val gap = if (isDrawerOpen) 0.dp else 68.dp
 
-                    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-                    // 【核心融合点】如果是键盘弹起（isImeVisible），用新的穿透界限（例如 32dp）；否则用原来的 18dp
-                    val gap = if (isImeVisible) 104.dp else 104.dp
-
-                    // 消息列表（铺满下层）
+                    // 消息列表
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             top = 16.dp,
                             start = 16.dp,
                             end = 16.dp,
-                            // 因为外层处理了 imePadding 和 navigationBarsPadding，这里的 navBarHeight 在最外层已经发挥了作用
-                            // 这里直接留出 gap 即可（如果为了心理安慰保留 navBarHeight，因为外层已经加了防闪烁逻辑，实际这里加 0 即可）
                             bottom = gap
                         ),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -770,7 +778,7 @@ fun ChatScreen(
                         }
                     }
 
-                    // 底部纯白盾牌，高度跟随 gap 动态变化，完美遮挡消息滑向物理底边
+                    // 底部纯白盾牌，高度跟随动态 gap
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -779,15 +787,14 @@ fun ChatScreen(
                             .background(Color.White)
                     )
 
-                    // 悬浮输入框
+                    // 悬浮输入框（抽屉打开时直接隐藏，完美配合底部全显示）
                     if (!isDrawerOpen) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
-                                // 因为外层已经有了 imePadding 或 navigationBarsPadding，这里只需固定的 4dp 间距
-                                .padding(bottom = 42.dp)
+                                .padding(bottom = 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
