@@ -30,6 +30,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -730,7 +731,7 @@ fun ChatScreen(
                     modifier = Modifier.statusBarsPadding()
                 )
 
-                // 统一避让，让空白页和消息页的键盘上浮逻辑一致
+                // 统一避让
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -763,7 +764,6 @@ fun ChatScreen(
                             )
                         }
                     } else {
-                        // 【核心修复】使用 reverseLayout = true 让列表从底部开始排列，完美仿照微信逻辑。
                         LazyColumn(
                             state = listState,
                             reverseLayout = true,
@@ -776,9 +776,17 @@ fun ChatScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            // 1. 消息
-                            items(messages.reversed()) { msg ->
-                                Box(modifier = Modifier.padding(top = 28.dp)) {
+                            // 【修改点1】视觉最底部的占位，高度从 16dp 改为 40dp
+                            if (messages.isNotEmpty()) {
+                                item { Spacer(modifier = Modifier.height(40.dp)) }
+                            }
+
+                            // 2. 消息列表
+                            itemsIndexed(messages.reversed()) { index, msg ->
+                                val isFirstMsg = index == messages.size - 1
+                                val topPadding = if (isFirstMsg) 8.dp else 28.dp
+
+                                Box(modifier = Modifier.padding(top = topPadding)) {
                                     if (msg.role == "user") {
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                             Surface(
@@ -808,19 +816,19 @@ fun ChatScreen(
                                 }
                             }
 
-                            // 2. 加载状态
+                            // 3. 加载状态
                             if (isLoading) {
                                 item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 28.dp)) }
                             }
 
-                            // 3. 免责声明（放最后，即视觉上的最上方）
+                            // 4. 免责声明
                             if (messages.isNotEmpty()) {
                                 item {
                                     Text(
                                         "回答由AI生成，仅供参考",
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(bottom = 8.dp),
+                                            .padding(bottom = 4.dp),
                                         textAlign = TextAlign.Center,
                                         color = textSecondary,
                                         fontSize = 10.sp
@@ -828,9 +836,9 @@ fun ChatScreen(
                                 }
                             }
 
-                            // 顶部留白
+                            // 【修改点2】顶部留白，高度从 12dp 改为 0dp
                             if (messages.isNotEmpty()) {
-                                item { Spacer(modifier = Modifier.height(24.dp)) }
+                                item { Spacer(modifier = Modifier.height(0.dp)) }
                             }
                         }
                     }
@@ -846,7 +854,8 @@ fun ChatScreen(
                                 .background(Color.White)
                         )
 
-                        val showScrollBtn = listState.canScrollForward && !isDrawerOpen
+                        // 【修改点3】在 reverseLayout 下，用 canScrollBackward 判断是否显示按钮
+                        val showScrollBtn = listState.canScrollBackward && !isDrawerOpen
                         val scrollBtnAlpha by animateFloatAsState(
                             targetValue = if (showScrollBtn) 1f else 0f,
                             animationSpec = tween(durationMillis = 40),
@@ -875,7 +884,8 @@ fun ChatScreen(
                                             indication = null
                                         ) {
                                             scope.launch {
-                                                listState.animateScrollToItem(0) // reverseLayout 下，0 就是底部
+                                                // reverseLayout 下，0 就是底部
+                                                listState.animateScrollToItem(0)
                                             }
                                         }
                                         .graphicsLayer {
