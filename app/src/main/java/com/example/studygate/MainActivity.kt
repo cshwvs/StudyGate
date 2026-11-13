@@ -3,6 +3,7 @@ package com.example.studygate
 import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -81,8 +83,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 核心隔断：禁止系统压缩窗口，彻底斩断键盘对底层布局的拉扯
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        window.setBackgroundDrawable(ColorDrawable(AndroidColor.WHITE))
 
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
@@ -156,6 +158,14 @@ fun AppNavigation() {
     var globalModel by remember { mutableStateOf("") }
     var isLoaded by remember { mutableStateOf(false) }
 
+    // 【开屏防闪终极必杀】用一个纯白遮罩覆盖整个屏幕 500ms
+    var isAppReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // 强制遮盖 500 毫秒，无视底层任何抽屉动画
+        delay(500)
+        isAppReady = true
+    }
+
     var sessions by remember { mutableStateOf<List<ChatSession>>(emptyList()) }
     var currentSessionId by remember { mutableStateOf<String?>(null) }
 
@@ -181,43 +191,59 @@ fun AppNavigation() {
         isLoaded = true
     }
 
-    if (!isLoaded) return
+    if (!isLoaded) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.White))
+        return
+    }
 
-    NavHost(navController = navController, startDestination = "chat") {
-        composable("chat") {
-            ChatScreen(
-                navController = navController,
-                sessions = sessions,
-                currentSessionId = currentSessionId,
-                globalBaseUrl = globalBaseUrl,
-                globalApiKey = globalApiKey,
-                onUpdateSessions = { sessions = it; saveAllToDataStore() },
-                onSwitchSession = { currentSessionId = it }
-            )
+    Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        NavHost(navController = navController, startDestination = "chat") {
+            composable("chat") {
+                ChatScreen(
+                    navController = navController,
+                    sessions = sessions,
+                    currentSessionId = currentSessionId,
+                    globalBaseUrl = globalBaseUrl,
+                    globalApiKey = globalApiKey,
+                    onUpdateSessions = { sessions = it; saveAllToDataStore() },
+                    onSwitchSession = { currentSessionId = it }
+                )
+            }
+            composable("setup") {
+                SetupScreen(
+                    navController = navController,
+                    initialBaseUrl = globalBaseUrl,
+                    initialApiKey = globalApiKey,
+                    initialModel = globalModel,
+                    onSave = { title, baseUrl, apiKey, model ->
+                        globalBaseUrl = baseUrl
+                        globalApiKey = apiKey
+                        globalModel = model
+
+                        val newSession = ChatSession(
+                            id = UUID.randomUUID().toString(),
+                            title = if (title.isBlank()) "新对话" else title,
+                            messages = mutableListOf(),
+                            timestamp = System.currentTimeMillis(),
+                            model = model
+                        )
+                        sessions = listOf(newSession) + sessions
+                        currentSessionId = newSession.id
+                        saveAllToDataStore()
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
-        composable("setup") {
-            SetupScreen(
-                navController = navController,
-                initialBaseUrl = globalBaseUrl,
-                initialApiKey = globalApiKey,
-                initialModel = globalModel,
-                onSave = { title, baseUrl, apiKey, model ->
-                    globalBaseUrl = baseUrl
-                    globalApiKey = apiKey
-                    globalModel = model
 
-                    val newSession = ChatSession(
-                        id = UUID.randomUUID().toString(),
-                        title = if (title.isBlank()) "新对话" else title,
-                        messages = mutableListOf(),
-                        timestamp = System.currentTimeMillis(),
-                        model = model
-                    )
-                    sessions = listOf(newSession) + sessions
-                    currentSessionId = newSession.id
-                    saveAllToDataStore()
-                    navController.popBackStack()
-                }
+        // 盖在所有 UI 最上层的纯白遮罩，淡出
+        if (!isAppReady) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White)
+                    // 拦截所有触摸事件，防止白屏期间误触
+                    .pointerInput(Unit) { detectTapGestures(onTap = {}) }
             )
         }
     }
@@ -238,24 +264,7 @@ fun SetupScreen(
     var apiKey by remember { mutableStateOf(initialApiKey) }
     var model by remember { mutableStateOf(initialModel) }
 
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-
     Scaffold(
-        modifier = Modifier
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        if (dragOffset > 150f) {
-                            navController.popBackStack()
-                        }
-                        dragOffset = 0f
-                    },
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        dragOffset += dragAmount
-                    }
-                )
-            },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("新建对话", fontSize = 16.sp, fontWeight = FontWeight.Medium) },
@@ -274,11 +283,11 @@ fun SetupScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val textFieldColors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFFECF2FE),
+                focusedBorderColor = Color(0xFF416EFD),
                 unfocusedBorderColor = Color(0xFFE0E0E0),
-                focusedLabelColor = Color(0xFFECF2FE),
-                unfocusedLabelColor = Color(0xFF888888),
-                cursorColor = Color(0xFFECF2FE)
+                focusedLabelColor = Color(0xFF416EFD),
+                unfocusedLabelColor = Color(0xFFA3A4A6),
+                cursorColor = Color(0xFF416EFD)
             )
             val textFieldShape = RoundedCornerShape(16.dp)
 
@@ -350,7 +359,7 @@ fun ChatScreen(
     val currentTitle = currentSession?.title ?: "新对话"
 
     val textPrimary = Color(0xFF1A1A1A)
-    val textSecondary = Color(0xFF888888)
+    val textSecondary = Color(0xFFA3A4A6)
     val userBubbleColor = Color(0xFFE8F0FE)
     val placeholderColor = Color(0xFFCCCCCC)
 
@@ -360,7 +369,6 @@ fun ChatScreen(
         if (!isImeVisible) focusManager.clearFocus()
     }
 
-    // 只要抽屉一关闭，强制瞬间砸下键盘
     LaunchedEffect(isDrawerOpen) {
         if (!isDrawerOpen) {
             focusManager.clearFocus(force = true)
@@ -401,7 +409,6 @@ fun ChatScreen(
                             onClick = {
                                 val target = showRenameDialogFor!!
                                 val newTitle = if (renameInput.isBlank()) "未命名" else renameInput
-                                // 【修复】使用 copy 生成新对象，强制 Compose 刷新 UI
                                 onUpdateSessions(sessions.map { if (it.id == target.id) it.copy(title = newTitle) else it })
                                 showRenameDialogFor = null
                             },
@@ -623,7 +630,6 @@ fun ChatScreen(
                                                                     .clip(RoundedCornerShape(0.dp))
                                                                     .background(Color.White)
                                                                     .clickable {
-                                                                        // 【修复】置顶逻辑也使用 copy 生成新对象
                                                                         onUpdateSessions(sessions.map { if (it.id == session.id) it.copy(isPinned = !it.isPinned) else it })
                                                                         showMenu = false
                                                                     }
@@ -726,55 +732,59 @@ fun ChatScreen(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
-                                top = 16.dp,
+                                top = 0.dp,
                                 start = 16.dp,
                                 end = 16.dp,
                                 bottom = gap
                             ),
-                            verticalArrangement = Arrangement.spacedBy(28.dp)
+                            verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
                             if (messages.isNotEmpty()) {
                                 item {
                                     Text(
                                         "回答由AI生成，仅供参考",
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 0.dp, bottom = 8.dp),
                                         textAlign = TextAlign.Center,
-                                        color = Color.LightGray,
+                                        color = textSecondary,
                                         fontSize = 10.sp
                                     )
                                 }
                             }
 
                             items(messages) { msg ->
-                                if (msg.role == "user") {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                        Surface(
-                                            color = userBubbleColor,
-                                            shape = RoundedCornerShape(16.dp),
-                                            modifier = Modifier.widthIn(max = 280.dp)
-                                        ) {
-                                            Text(
-                                                text = msg.content,
-                                                modifier = Modifier.padding(12.dp),
-                                                color = textPrimary,
-                                                fontSize = 12.sp,
-                                                lineHeight = 18.sp
-                                            )
+                                Box(modifier = Modifier.padding(bottom = 28.dp)) {
+                                    if (msg.role == "user") {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                            Surface(
+                                                color = userBubbleColor,
+                                                shape = RoundedCornerShape(16.dp),
+                                                modifier = Modifier.widthIn(max = 280.dp)
+                                            ) {
+                                                Text(
+                                                    text = msg.content,
+                                                    modifier = Modifier.padding(12.dp),
+                                                    color = textPrimary,
+                                                    fontSize = 12.sp,
+                                                    lineHeight = 18.sp
+                                                )
+                                            }
                                         }
-                                    }
-                                } else {
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("已思考 (用时 2 秒)", color = textSecondary, fontSize = 12.sp)
-                                            Text(" ∨", color = textSecondary, fontSize = 12.sp)
+                                    } else {
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("已思考 (用时 2 秒)", color = textSecondary, fontSize = 12.sp)
+                                                Text(" ∨", color = textSecondary, fontSize = 12.sp)
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(text = msg.content, color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
                                         }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(text = msg.content, color = textPrimary, fontSize = 12.sp, lineHeight = 18.sp)
                                     }
                                 }
                             }
                             if (isLoading) {
-                                item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp) }
+                                item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(bottom = 28.dp)) }
                             }
 
                             if (messages.isNotEmpty()) {
@@ -791,7 +801,6 @@ fun ChatScreen(
                             .background(Color.White)
                     )
 
-                    // 【修改点】拉出抽屉时隐藏按钮
                     val showScrollBtn = listState.canScrollForward && !isDrawerOpen
                     val scrollBtnAlpha by animateFloatAsState(
                         targetValue = if (showScrollBtn) 1f else 0f,
@@ -807,21 +816,15 @@ fun ChatScreen(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            // 【修改点】位置往上移动了 16dp，变成 gap + 32.dp
-                            .padding(end = 20.dp, bottom = gap + 32.dp)
+                            .padding(end = 20.dp, bottom = gap + 40.dp)
                     ) {
                         if (scrollBtnAlpha > 0f) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.White,
-                                shadowElevation = 4.dp,
+                            Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .graphicsLayer {
-                                        alpha = scrollBtnAlpha
-                                        scaleX = scrollBtnScale
-                                        scaleY = scrollBtnScale
-                                    }
+                                    // 【修改点】使用 Modifier.shadow 强制圆角阴影，替代 Surface.shadowElevation
+                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                                    .background(Color.White, CircleShape)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
@@ -832,15 +835,18 @@ fun ChatScreen(
                                             }
                                         }
                                     }
+                                    .graphicsLayer {
+                                        alpha = scrollBtnAlpha
+                                        scaleX = scrollBtnScale
+                                        scaleY = scrollBtnScale
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "回到底部",
-                                        // 【修改点】颜色与加号保持一致，用 textPrimary
-                                        tint = textPrimary
-                                    )
-                                }
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "回到底部",
+                                    tint = textPrimary
+                                )
                             }
                         }
                     }
