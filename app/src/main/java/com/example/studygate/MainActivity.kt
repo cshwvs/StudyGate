@@ -158,7 +158,6 @@ fun AppNavigation() {
     var globalModel by remember { mutableStateOf("") }
     var isLoaded by remember { mutableStateOf(false) }
 
-    // 开屏防闪终极必杀
     var isAppReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(500)
@@ -489,11 +488,18 @@ fun ChatScreen(
                                         value = searchQuery,
                                         onValueChange = { searchQuery = it },
                                         modifier = Modifier.fillMaxWidth(),
-                                        textStyle = TextStyle(fontSize = 12.sp, color = textPrimary),
+                                        textStyle = TextStyle(fontSize = 12.sp, color = textPrimary, lineHeight = 16.sp),
                                         singleLine = true,
                                         decorationBox = { innerTextField ->
-                                            if (searchQuery.isEmpty()) Text("搜索聊天内容...", color = textSecondary, fontSize = 12.sp)
-                                            innerTextField()
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                contentAlignment = Alignment.CenterStart
+                                            ) {
+                                                if (searchQuery.isEmpty()) {
+                                                    Text("搜索聊天内容...", color = textSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+                                                }
+                                                innerTextField()
+                                            }
                                         }
                                     )
                                 }
@@ -525,7 +531,7 @@ fun ChatScreen(
                             }
 
                             for ((groupName, groupSessions) in grouped) {
-                                item { Text(groupName, color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)) }
+                                item { Text(groupName, color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)) }
 
                                 items(groupSessions) { session ->
                                     var showMenu by remember { mutableStateOf(false) }
@@ -538,7 +544,7 @@ fun ChatScreen(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(vertical = 4.dp)
+                                                .padding(vertical = 1.dp)
                                                 .clip(RoundedCornerShape(16.dp))
                                                 .background(if (isCurrent) Color(0xFFECF2FE) else Color.Transparent)
                                                 .combinedClickable(
@@ -548,7 +554,7 @@ fun ChatScreen(
                                                     },
                                                     onLongClick = { showMenu = true }
                                                 )
-                                                .padding(start = 12.dp, top = 8.dp, bottom = 8.dp)
+                                                .padding(start = 12.dp, top = 6.dp, bottom = 6.dp)
                                         ) {
                                             Text(
                                                 text = (if (session.isPinned) "[置顶] " else "") + session.title,
@@ -698,14 +704,26 @@ fun ChatScreen(
                     modifier = Modifier.statusBarsPadding()
                 )
 
+                // 【核心修复】
+                // 外层统一处理导航栏和键盘的避让，这样内部的输入框底部间距就永远不会因为状态变化而跳变。
+                // 键盘弹起时，navigationBarsPadding会被imePadding覆盖，所以平滑收起时不会有抖动。
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                    // 去掉外层的 navigationBarsPadding，实现底层完全全屏
+                        .then(
+                            if (!isDrawerOpen) {
+                                Modifier
+                                    .navigationBarsPadding()
+                                    .imePadding()
+                            } else {
+                                Modifier
+                                    .navigationBarsPadding()
+                                    .consumeWindowInsets(WindowInsets.ime)
+                            }
+                        )
                 ) {
-                    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                    // 固定 padding，包含导航栏高度，彻底锁死尺寸
-                    val gap = 68.dp + navBarHeight
+                    // 因为外层已经处理了所有的底部避让，内部列表只需要一个固定的 68dp 穿透界限即可
+                    val gap = 68.dp
 
                     if (messages.isEmpty() && !isLoading) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -782,7 +800,6 @@ fun ChatScreen(
                         }
                     }
 
-                    // 抽屉关闭时，显示白盾牌；抽屉打开时，白盾牌高度为 0，直接露底。
                     if (!isDrawerOpen) {
                         Box(
                             modifier = Modifier
@@ -793,7 +810,6 @@ fun ChatScreen(
                         )
                     }
 
-                    // 【修改点】按钮消失速度极快，只要 80ms
                     val showScrollBtn = listState.canScrollForward && !isDrawerOpen
                     val scrollBtnAlpha by animateFloatAsState(
                         targetValue = if (showScrollBtn) 1f else 0f,
@@ -848,10 +864,9 @@ fun ChatScreen(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .imePadding()
-                                .padding(horizontal = 16.dp)
-                                // 输入框的底部 margin 改为动态计算，把导航栏高度算进去
-                                .padding(bottom = navBarHeight + 4.dp)
+                                // 【核心修复】因为外层已经处理了 imePadding 和 navigationBarsPadding，这里直接用固定值 4.dp
+                                // 这样无论键盘收起还是弹起，间距永远是 4.dp，绝不会发生突变。
+                                .padding(bottom = 4.dp, start = 16.dp, end = 16.dp)
                         ) {
                             Box(
                                 modifier = Modifier
