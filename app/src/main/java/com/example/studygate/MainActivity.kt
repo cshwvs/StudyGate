@@ -91,6 +91,10 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
         )
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
@@ -331,19 +335,29 @@ fun ChatScreen(
     onSwitchSession: (String?) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     val isImeVisible = WindowInsets.isImeVisible
 
     val listState = rememberLazyListState()
 
+    val searchInteractionSource = remember { MutableInteractionSource() }
+    val isSearchFocused by searchInteractionSource.collectIsFocusedAsState()
+
+    var forceClose by remember { mutableStateOf(false) }
+
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed) { targetValue ->
+        if (targetValue == DrawerValue.Closed && isSearchFocused && !forceClose) {
+            focusManager.clearFocus(force = true)
+            false
+        } else {
+            true
+        }
+    }
+
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var isSearchEnabled by remember { mutableStateOf(false) }
-
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
 
     var showRenameDialogFor by remember { mutableStateOf<ChatSession?>(null) }
     var renameInput by remember { mutableStateOf("") }
@@ -367,9 +381,7 @@ fun ChatScreen(
 
     LaunchedEffect(isDrawerOpen) {
         if (!isDrawerOpen) {
-            focusManager.clearFocus(force = true)
-            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.hideSoftInputFromWindow(View(context).windowToken, 0)
+            forceClose = false
         }
     }
 
@@ -487,6 +499,7 @@ fun ChatScreen(
                                     BasicTextField(
                                         value = searchQuery,
                                         onValueChange = { searchQuery = it },
+                                        interactionSource = searchInteractionSource,
                                         modifier = Modifier.fillMaxWidth(),
                                         textStyle = TextStyle(fontSize = 12.sp, color = textPrimary, lineHeight = 16.sp),
                                         singleLine = true,
@@ -549,8 +562,13 @@ fun ChatScreen(
                                                 .background(if (isCurrent) Color(0xFFECF2FE) else Color.Transparent)
                                                 .combinedClickable(
                                                     onClick = {
+                                                        focusManager.clearFocus(force = true)
+                                                        forceClose = true
                                                         onSwitchSession(session.id)
-                                                        scope.launch { drawerState.close() }
+                                                        scope.launch {
+                                                            drawerState.close()
+                                                            forceClose = false
+                                                        }
                                                     },
                                                     onLongClick = { showMenu = true }
                                                 )
@@ -694,7 +712,15 @@ fun ChatScreen(
                     },
                     actions = {
                         IconButton(
-                            onClick = { navController.navigate("setup") },
+                            onClick = {
+                                focusManager.clearFocus(force = true)
+                                forceClose = true
+                                navController.navigate("setup")
+                                scope.launch {
+                                    drawerState.close()
+                                    forceClose = false
+                                }
+                            },
                             modifier = Modifier.padding(end = 8.dp).size(36.dp)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = "新建", tint = textPrimary)
@@ -704,9 +730,8 @@ fun ChatScreen(
                     modifier = Modifier.statusBarsPadding()
                 )
 
-                // 【核心修复】
-                // 外层统一处理导航栏和键盘的避让，这样内部的输入框底部间距就永远不会因为状态变化而跳变。
-                // 键盘弹起时，navigationBarsPadding会被imePadding覆盖，所以平滑收起时不会有抖动。
+                // 【核心闭环】
+                // 外层统一处理键盘避让和导航栏避让。抽屉打开时去掉导航栏避让实现全屏。
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -717,16 +742,23 @@ fun ChatScreen(
                                     .imePadding()
                             } else {
                                 Modifier
-                                    .navigationBarsPadding()
                                     .consumeWindowInsets(WindowInsets.ime)
                             }
                         )
                 ) {
-                    // 因为外层已经处理了所有的底部避让，内部列表只需要一个固定的 68dp 穿透界限即可
-                    val gap = 68.dp
+                    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+                    // 等量代换，保证 LazyColumn 总高度不变，彻底解决下坠
+                    val gap = if (isDrawerOpen) navBarHeight + 68.dp else 68.dp
 
                     if (messages.isEmpty() && !isLoading) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                // 【核心修复】空白状态同样需要高度补偿，保证居中文字绝对不动
+                                .padding(bottom = if (isDrawerOpen) navBarHeight else 0.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
                                 "Hi，有什么可以帮到你的吗？",
                                 color = Color(0xFF1A1A1A),
@@ -800,7 +832,9 @@ fun ChatScreen(
                         }
                     }
 
+                    // 输入框和白盾牌
                     if (!isDrawerOpen) {
+                        // 白盾牌
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -808,64 +842,62 @@ fun ChatScreen(
                                 .height(gap)
                                 .background(Color.White)
                         )
-                    }
 
-                    val showScrollBtn = listState.canScrollForward && !isDrawerOpen
-                    val scrollBtnAlpha by animateFloatAsState(
-                        targetValue = if (showScrollBtn) 1f else 0f,
-                        animationSpec = tween(durationMillis = 80),
-                        label = "scrollBtnAlpha"
-                    )
-                    val scrollBtnScale by animateFloatAsState(
-                        targetValue = if (showScrollBtn) 1f else 0.8f,
-                        animationSpec = tween(durationMillis = 80),
-                        label = "scrollBtnScale"
-                    )
+                        val showScrollBtn = listState.canScrollForward && !isDrawerOpen
+                        val scrollBtnAlpha by animateFloatAsState(
+                            targetValue = if (showScrollBtn) 1f else 0f,
+                            animationSpec = tween(durationMillis = 40),
+                            label = "scrollBtnAlpha"
+                        )
+                        val scrollBtnScale by animateFloatAsState(
+                            targetValue = if (showScrollBtn) 1f else 0.8f,
+                            animationSpec = tween(durationMillis = 40),
+                            label = "scrollBtnScale"
+                        )
 
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 20.dp, bottom = gap + 40.dp)
-                    ) {
-                        if (scrollBtnAlpha > 0f) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                    .background(Color.White, CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        scope.launch {
-                                            if (listState.layoutInfo.totalItemsCount > 0) {
-                                                listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                        // 一键回底按钮
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 20.dp, bottom = gap + 40.dp)
+                        ) {
+                            if (scrollBtnAlpha > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                                        .background(Color.White, CircleShape)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            scope.launch {
+                                                if (listState.layoutInfo.totalItemsCount > 0) {
+                                                    listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                                                }
                                             }
                                         }
-                                    }
-                                    .graphicsLayer {
-                                        alpha = scrollBtnAlpha
-                                        scaleX = scrollBtnScale
-                                        scaleY = scrollBtnScale
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "回到底部",
-                                    tint = textPrimary
-                                )
+                                        .graphicsLayer {
+                                            alpha = scrollBtnAlpha
+                                            scaleX = scrollBtnScale
+                                            scaleY = scrollBtnScale
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "回到底部",
+                                        tint = textPrimary
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    if (!isDrawerOpen) {
+                        // 输入框
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                // 【核心修复】因为外层已经处理了 imePadding 和 navigationBarsPadding，这里直接用固定值 4.dp
-                                // 这样无论键盘收起还是弹起，间距永远是 4.dp，绝不会发生突变。
                                 .padding(bottom = 4.dp, start = 16.dp, end = 16.dp)
                         ) {
                             Box(
@@ -906,7 +938,7 @@ fun ChatScreen(
                                             BasicTextField(
                                                 value = input,
                                                 onValueChange = { input = it },
-                                                interactionSource = interactionSource,
+                                                interactionSource = remember { MutableInteractionSource() },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 textStyle = TextStyle(
                                                     fontSize = 12.sp,
