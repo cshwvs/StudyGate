@@ -158,10 +158,9 @@ fun AppNavigation() {
     var globalModel by remember { mutableStateOf("") }
     var isLoaded by remember { mutableStateOf(false) }
 
-    // 【开屏防闪终极必杀】用一个纯白遮罩覆盖整个屏幕 500ms
+    // 开屏防闪终极必杀
     var isAppReady by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        // 强制遮盖 500 毫秒，无视底层任何抽屉动画
         delay(500)
         isAppReady = true
     }
@@ -236,13 +235,11 @@ fun AppNavigation() {
             }
         }
 
-        // 盖在所有 UI 最上层的纯白遮罩，淡出
         if (!isAppReady) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.White)
-                    // 拦截所有触摸事件，防止白屏期间误触
                     .pointerInput(Unit) { detectTapGestures(onTap = {}) }
             )
         }
@@ -704,19 +701,11 @@ fun ChatScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .then(
-                            if (!isDrawerOpen) {
-                                Modifier
-                                    .imePadding()
-                                    .navigationBarsPadding()
-                            } else {
-                                Modifier
-                                    .navigationBarsPadding()
-                                    .consumeWindowInsets(WindowInsets.ime)
-                            }
-                        )
+                    // 去掉外层的 navigationBarsPadding，实现底层完全全屏
                 ) {
-                    val gap = if (isDrawerOpen) 0.dp else 68.dp
+                    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    // 固定 padding，包含导航栏高度，彻底锁死尺寸
+                    val gap = 68.dp + navBarHeight
 
                     if (messages.isEmpty() && !isLoading) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -793,23 +782,27 @@ fun ChatScreen(
                         }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(gap)
-                            .background(Color.White)
-                    )
+                    // 抽屉关闭时，显示白盾牌；抽屉打开时，白盾牌高度为 0，直接露底。
+                    if (!isDrawerOpen) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(gap)
+                                .background(Color.White)
+                        )
+                    }
 
+                    // 【修改点】按钮消失速度极快，只要 80ms
                     val showScrollBtn = listState.canScrollForward && !isDrawerOpen
                     val scrollBtnAlpha by animateFloatAsState(
                         targetValue = if (showScrollBtn) 1f else 0f,
-                        animationSpec = tween(durationMillis = 200),
+                        animationSpec = tween(durationMillis = 80),
                         label = "scrollBtnAlpha"
                     )
                     val scrollBtnScale by animateFloatAsState(
                         targetValue = if (showScrollBtn) 1f else 0.8f,
-                        animationSpec = tween(durationMillis = 200),
+                        animationSpec = tween(durationMillis = 80),
                         label = "scrollBtnScale"
                     )
 
@@ -822,7 +815,6 @@ fun ChatScreen(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    // 【修改点】使用 Modifier.shadow 强制圆角阴影，替代 Surface.shadowElevation
                                     .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
                                     .background(Color.White, CircleShape)
                                     .clickable(
@@ -856,8 +848,10 @@ fun ChatScreen(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
+                                .imePadding()
                                 .padding(horizontal = 16.dp)
-                                .padding(bottom = 4.dp)
+                                // 输入框的底部 margin 改为动态计算，把导航栏高度算进去
+                                .padding(bottom = navBarHeight + 4.dp)
                         ) {
                             Box(
                                 modifier = Modifier
