@@ -730,8 +730,7 @@ fun ChatScreen(
                     modifier = Modifier.statusBarsPadding()
                 )
 
-                // 【核心闭环】
-                // 外层统一处理键盘避让和导航栏避让。抽屉打开时去掉导航栏避让实现全屏。
+                // 统一避让，让空白页和消息页的键盘上浮逻辑一致
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -747,15 +746,12 @@ fun ChatScreen(
                         )
                 ) {
                     val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-                    // 等量代换，保证 LazyColumn 总高度不变，彻底解决下坠
                     val gap = if (isDrawerOpen) navBarHeight + 68.dp else 68.dp
 
                     if (messages.isEmpty() && !isLoading) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                // 【核心修复】空白状态同样需要高度补偿，保证居中文字绝对不动
                                 .padding(bottom = if (isDrawerOpen) navBarHeight else 0.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -767,8 +763,10 @@ fun ChatScreen(
                             )
                         }
                     } else {
+                        // 【核心修复】使用 reverseLayout = true 让列表从底部开始排列，完美仿照微信逻辑。
                         LazyColumn(
                             state = listState,
+                            reverseLayout = true,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
                                 top = 0.dp,
@@ -778,22 +776,9 @@ fun ChatScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            if (messages.isNotEmpty()) {
-                                item {
-                                    Text(
-                                        "回答由AI生成，仅供参考",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 0.dp, bottom = 8.dp),
-                                        textAlign = TextAlign.Center,
-                                        color = textSecondary,
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-
-                            items(messages) { msg ->
-                                Box(modifier = Modifier.padding(bottom = 28.dp)) {
+                            // 1. 消息
+                            items(messages.reversed()) { msg ->
+                                Box(modifier = Modifier.padding(top = 28.dp)) {
                                     if (msg.role == "user") {
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                             Surface(
@@ -822,10 +807,28 @@ fun ChatScreen(
                                     }
                                 }
                             }
+
+                            // 2. 加载状态
                             if (isLoading) {
-                                item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(bottom = 28.dp)) }
+                                item { Text("AI 正在思考...", color = textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 28.dp)) }
                             }
 
+                            // 3. 免责声明（放最后，即视觉上的最上方）
+                            if (messages.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        "回答由AI生成，仅供参考",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp),
+                                        textAlign = TextAlign.Center,
+                                        color = textSecondary,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+
+                            // 顶部留白
                             if (messages.isNotEmpty()) {
                                 item { Spacer(modifier = Modifier.height(24.dp)) }
                             }
@@ -872,9 +875,7 @@ fun ChatScreen(
                                             indication = null
                                         ) {
                                             scope.launch {
-                                                if (listState.layoutInfo.totalItemsCount > 0) {
-                                                    listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
-                                                }
+                                                listState.animateScrollToItem(0) // reverseLayout 下，0 就是底部
                                             }
                                         }
                                         .graphicsLayer {
